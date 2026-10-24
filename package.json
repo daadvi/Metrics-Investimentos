@@ -6,7 +6,7 @@
   "description": "Metrics Investimentos local-first, B3 COTAHIST, IA híbrida, importação e relatório fiscal auxiliar",
   "scripts": {
     "start": "node launcher.mjs",
-    "test": "node --test",
+    "test": "node --test --test-concurrency=1 test/ai.test.mjs test/api-e2e.test.mjs test/domain.test.mjs test/extended.test.mjs test/store.test.mjs test/v03.test.mjs test/v04-api.test.mjs test/v04-export.test.mjs test/v04-market-tax.test.mjs",
     "desktop:dev": "electron .",
     "desktop:build": "electron-builder --config electron-builder.json"
   },
