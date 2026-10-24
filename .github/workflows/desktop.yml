@@ -1,0 +1,51 @@
+name: Windows EXE | Metrics Investimentos
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  windows-exe:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Sem cache: o projeto ainda não possui package-lock.json.
+      - name: Instalar dependências
+        run: npm install --no-audit --no-fund
+
+      - name: Executar testes
+        run: npm test
+
+      - name: Compilar EXE portátil Windows
+        run: npm run desktop:build -- --win portable --x64
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: 'false'
+
+      - name: Validar executável gerado
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem dist -Filter *.exe -File
+          if ($files.Count -eq 0) { throw "Nenhum .exe foi gerado em dist/" }
+          $files | ForEach-Object { Write-Host "EXE: $($_.Name) | $($_.Length) bytes" }
+
+      - name: Disponibilizar EXE para download
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrics-Investimentos-Windows-EXE
+          path: dist/*.exe
+          if-no-files-found: error
+          retention-days: 30

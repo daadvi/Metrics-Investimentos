@@ -1,0 +1,10 @@
+{
+  "appId":"org.metricsinvestimentos.desktop",
+  "productName":"Metrics Investimentos",
+  "directories":{"output":"dist"},
+  "asar":false,
+  "files":["desktop/**","server.mjs","src/**","web/**","package.json","LICENSE","README.md"],
+  "linux":{"target":["AppImage"],"category":"Office"},
+  "win":{"target":["portable"]},
+  "mac":{"target":["dmg"]}
+}

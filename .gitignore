@@ -1,0 +1,24 @@
+node_modules/
+.env
+.env.*
+*.log
+.DS_Store
+build/
+dist/
+metrics.json
+
+# Dados pessoais e backups
+dados/
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+*.bak
+*.backup
+*.xlsx
+*.xls
+*.csv
+*.pdf
+!test/fixtures/b3-exemplo.xlsx
