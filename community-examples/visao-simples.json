@@ -1,0 +1,27 @@
+{
+  "id": "org.metrics.visao-simples",
+  "name": "Visão simples da carteira",
+  "version": "1.0.0",
+  "description": "Exemplo aberto de extensão declarativa. Lista apenas ativos da carteira selecionada e resume o custo registrado, sem rede ou execução de código.",
+  "capabilities": [
+    "portfolio.positions",
+    "portfolio.summary"
+  ],
+  "widgets": [
+    {
+      "id": "custo-total",
+      "title": "Custo das posições",
+      "type": "metric",
+      "source": "summary",
+      "field": "holdingCost"
+    },
+    {
+      "id": "posicoes",
+      "title": "Posições abertas",
+      "type": "table",
+      "source": "positions",
+      "columns": ["ticker", "quantity", "average", "cost"],
+      "limit": 30
+    }
+  ]
+}

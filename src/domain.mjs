@@ -10,16 +10,28 @@ const number = (v,name,{zero=false}={}) => {
   return n;
 };
 const money = (v,name,{zero=false}={}) => Math.round((number(v,name,{zero})+Number.EPSILON)*100)/100;
+export function validDate(date){
+ if(typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date))return false;
+ const [year,month,day]=date.split('-').map(Number);
+ if(year<1900||year>2200||month<1||month>12||day<1||day>31)return false;
+ const parsed=new Date(Date.UTC(year,month-1,day));
+ return parsed.getUTCFullYear()===year&&parsed.getUTCMonth()===month-1&&parsed.getUTCDate()===day;
+}
+export const INCOME_TYPES=['DIVIDEND','JCP','AMORTIZATION'];
+
 export function validateTransaction(input) {
   const type=String(input.type??'').toUpperCase();
-  if(!['BUY','SELL','DIVIDEND'].includes(type)) throw new Error('Tipo de operação inválido.');
+  if(!['BUY','SELL','SPLIT','REVERSE_SPLIT','BONUS',...INCOME_TYPES].includes(type)) throw new Error('Tipo de operação inválido.');
   const ticker=tickerOf(input.ticker);
   const date=String(input.date??'');
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(`${date}T12:00:00Z`))) throw new Error('Data inválida.');
+  if(!validDate(date)) throw new Error('Data inválida.');
   const base={ticker,type,date,notes:String(input.notes??'').slice(0,300)};
-  if(type==='DIVIDEND') return {...base,quantity:0,price:0,fee:0,amount:money(input.amount,'Dividendo')};
+  if(['SPLIT','REVERSE_SPLIT'].includes(type)){const factor=number(input.factor,'Fator de desdobramento');if(factor>1000)throw new Error('Fator acima do limite.');return {...base,quantity:0,price:0,fee:0,amount:0,factor};}
+  if(type==='BONUS'){const quantity=number(input.quantity,'Quantidade bonificada');const basis=money(input.basis??0,'Custo fiscal atribuído à bonificação',{zero:true});return {...base,quantity,price:0,fee:0,amount:0,basis,requiresTaxReview:true};}
+  if(INCOME_TYPES.includes(type)) return {...base,quantity:0,price:0,fee:0,amount:money(input.amount,'Provento ou amortização'),adjustCost:type==='AMORTIZATION'&&input.adjustCost===true};
   const quantity=number(input.quantity,'Quantidade');
-  const price=money(input.price,'Preço por unidade');
+  const price=Math.round((number(input.price,'Preço por unidade')+Number.EPSILON)*1000000)/1000000;
+  if(price<=0)throw new Error('Preço por unidade menor que a precisão suportada.');
   const fee=money(input.fee??0,'Taxa',{zero:true});
   return {...base,quantity,price,fee,amount:0};
 }
@@ -38,7 +50,7 @@ export function calculatePositions(transactions) {
   const sorted=[...transactions].sort((a,b)=>a.date.localeCompare(b.date)||String(a.createdAt??'').localeCompare(String(b.createdAt??'')));
   for(const t of sorted){
     let p=map.get(t.ticker);
-    if(!p){p={ticker:t.ticker,quantity:0,cost:0,dividends:0,realized:0,buys:0,sells:0};map.set(t.ticker,p);}
+    if(!p){p={ticker:t.ticker,quantity:0,cost:0,dividends:0,jcp:0,amortization:0,realized:0,buys:0,sells:0};map.set(t.ticker,p);}
     if(t.type==='BUY') {
       p.quantity+=t.quantity; p.cost+=t.quantity*t.price+t.fee; p.buys++;
     }else if(t.type==='SELL') {
@@ -47,14 +59,18 @@ export function calculatePositions(transactions) {
       p.realized+=t.quantity*t.price-t.fee-t.quantity*avg;
       p.cost-=t.quantity*avg; p.quantity-=t.quantity;p.sells++;
       if(p.quantity<1e-8){p.quantity=0;p.cost=0;}
-    }else p.dividends+=t.amount;
+    }else if(t.type==='SPLIT'||t.type==='REVERSE_SPLIT'){if(p.quantity<=0)throw new Error(`Evento ${t.type} sem posição anterior em ${t.date}: ${t.ticker}`);p.quantity=+(p.quantity*t.factor).toFixed(8);}
+    else if(t.type==='BONUS'){if(p.quantity<=0)throw new Error(`Bonificação sem posição anterior em ${t.date}: ${t.ticker}`);p.quantity+=t.quantity;p.cost+=t.basis||0;}
+    else if(t.type==='DIVIDEND')p.dividends+=t.amount;
+    else if(t.type==='JCP')p.jcp+=t.amount;
+    else if(t.type==='AMORTIZATION'){p.amortization+=t.amount;if(t.adjustCost){if(t.amount>p.cost+0.005)throw new Error('Amortização excede custo remanescente; confira o informe fiscal.');p.cost=Math.max(0,p.cost-t.amount);}}
   }
-  const list=[...map.values()].map(p=>({...p,quantity:+p.quantity.toFixed(8),cost:+p.cost.toFixed(2),average:p.quantity?+(p.cost/p.quantity).toFixed(4):0,dividends:+p.dividends.toFixed(2),realized:+p.realized.toFixed(2)}));
+  const list=[...map.values()].map(p=>({...p,quantity:+p.quantity.toFixed(8),cost:+p.cost.toFixed(2),average:p.quantity?+(p.cost/p.quantity).toFixed(4):0,dividends:+p.dividends.toFixed(2),jcp:+p.jcp.toFixed(2),amortization:+p.amortization.toFixed(2),realized:+p.realized.toFixed(2)}));
   return list.sort((a,b)=>a.ticker.localeCompare(b.ticker));
 }
 export function portfolioTotals(transactions){
   const positions=calculatePositions(transactions);
-  return {positions,holdingCost:+positions.reduce((s,p)=>s+p.cost,0).toFixed(2),dividends:+positions.reduce((s,p)=>s+p.dividends,0).toFixed(2),realized:+positions.reduce((s,p)=>s+p.realized,0).toFixed(2),holdings:positions.filter(p=>p.quantity>0).length};
+  return {positions,holdingCost:+positions.reduce((s,p)=>s+p.cost,0).toFixed(2),dividends:+positions.reduce((s,p)=>s+p.dividends+p.jcp,0).toFixed(2),amortizations:+positions.reduce((s,p)=>s+p.amortization,0).toFixed(2),realized:+positions.reduce((s,p)=>s+p.realized,0).toFixed(2),holdings:positions.filter(p=>p.quantity>0).length};
 }
 export function simulate(input){
   const price=number(input.price,'Preço da cota'), dividend=number(input.dividend,'Dividendo',{zero:true});
@@ -116,6 +132,6 @@ export function portfolioAnalytics(transactions,quotes=[]){
  const totalMarket=priced.reduce((sum,p)=>sum+p.marketValue,0);
  const missing=valued.filter(p=>p.marketValue===null).map(p=>p.ticker);
  const dividendsByMonth={};const dividendsByTicker={};
- for(const t of transactions){if(t.type!=='DIVIDEND')continue;const m=t.date.slice(0,7);dividendsByMonth[m]=Math.round(((dividendsByMonth[m]||0)+t.amount)*100)/100;dividendsByTicker[t.ticker]=Math.round(((dividendsByTicker[t.ticker]||0)+t.amount)*100)/100;}
+ for(const t of transactions){if(!['DIVIDEND','JCP'].includes(t.type))continue;const m=t.date.slice(0,7);dividendsByMonth[m]=Math.round(((dividendsByMonth[m]||0)+t.amount)*100)/100;dividendsByTicker[t.ticker]=Math.round(((dividendsByTicker[t.ticker]||0)+t.amount)*100)/100;}
  return {positions:valued,covered:priced.length,totalPositions:valued.length,marketValue:Math.round(totalMarket*100)/100,missingQuotes:missing,marketValueComplete:missing.length===0&&valued.length>0,unrealized:Math.round(priced.reduce((sum,p)=>sum+p.unrealized,0)*100)/100,dividendsByMonth:Object.entries(dividendsByMonth).sort(),dividendsByTicker:Object.entries(dividendsByTicker).sort((a,b)=>b[1]-a[1])};
 }

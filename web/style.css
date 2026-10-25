@@ -24,3 +24,6 @@
 .multi-asset-row{display:grid;grid-template-columns:minmax(100px,1.1fr) minmax(85px,1fr) minmax(85px,1fr) minmax(65px,.7fr) 35px;align-items:end;gap:8px;padding:13px 0;border-bottom:1px solid var(--line)}
 .multi-asset-row button{margin-bottom:4px}.risk-details{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}.risk-details summary{cursor:pointer;color:var(--blue);font-size:12px;font-weight:750}.risk-details p{margin:6px 0}
 @media (max-width:820px){.multi-asset-row{grid-template-columns:repeat(2,minmax(0,1fr))}.multi-asset-row button{justify-self:start}}
+/* Metrics v1.3: long navigation must remain scrollable at small desktop heights. */
+@media(min-width:721px){.sidebar .nav{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--soft2) transparent}.sidebar .side-bottom{flex:none}}
+@media(max-width:720px){.sidebar .nav{flex:none;overflow-x:auto;overflow-y:hidden}}

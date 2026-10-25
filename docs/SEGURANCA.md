@@ -1,13 +1,10 @@
-# Segurança e privacidade — v0.2
+# Segurança e privacidade — Metrics 0.5
 
-O Metrics usa servidor acessível somente em loopback, cabeçalho não simples nas rotas de alteração, verificação de origem/host, CSP de UI, validação de campos e armazenamento local. Isso reduz exposição, mas não substitui uma auditoria profissional.
-
-**Dados persistidos:** SQLite, sem criptografia por padrão. Uma instalação nova pode usar `METRICS_PASSPHRASE` para criptografia AES-256-GCM do payload. A senha não é enviada a serviços externos. Proteja backups JSON separados.
-
-**IA:** conversas e contexto são enviados a provedor externo apenas se ele for escolhido pelo usuário. Contexto de carteira e documentos exige opção de consentimento. Documentos importados são considerados dados não confiáveis. A IA não possui permissão de executar ordens ou modificar operações.
-
-**Imports:** limite de 5 MB por arquivo; XLSX é parseado como ZIP/XML local, CSV como texto, PDF por pdftotext sem shell; macros nunca são executadas. Linhas não reconhecidas não são lançadas. Importações são transações atômicas e podem ser revertidas.
-
-**Riscos restantes:** modelo de IA pode errar; Node SQLite experimental; sem auditoria de dependências/pen test independente; restauração não é backup automático; alguns formatos Excel comprimidos podem ser recusados; relatórios HTML para impressão não equivalem à declaração de IR; browser externo, plugin ou malware local podem acessar dados do próprio usuário se tiverem privilégios de sistema.
-
-Não instale extensões desconhecidas nem armazene senha de banco/corretora nos campos livres do aplicativo. Não compartilhe o backup com terceiros.
+- Servidor restrito ao loopback local, autenticação via cookie HttpOnly, verificação de origem e cabeçalho específico em mutações, CSP e janela Electron isolada.
+- Banco usa SQLite local. Com `METRICS_PASSPHRASE`, o conteúdo do registro é criptografado com AES-256-GCM. No Electron, onde `safeStorage` de fato usa backend seguro, uma chave aleatória protegida pelo sistema operacional é configurada automaticamente.
+- A migração automática de banco antigo **não criptografado** só ocorre com `METRICS_MIGRATE_ENCRYPT=1`; operação transacional, com `secure_delete` e `VACUUM` para reduzir vestígios. Isso não elimina arquivos JSON, cópias externas ou backups antigos em plaintext.
+- Sem backend seguro de chave, o desktop poderá operar sem criptografia; conferir em Ajustes.
+- PDFs são processados localmente. O PDF.js reduz dependências de executáveis externos, mas não dispensa limites, testes de entrada maliciosa e atualizações de segurança.
+- Ferramentas de IA não modificam operações nem executam shell. Contexto e documentos somente com consentimento; fornecedor externo pode receber informações autorizadas. A máscara básica CPF/e-mail não garante anonimização.
+- Backups com senha do usuário e restore exigindo confirmação. Não publicar arquivos pessoais no GitHub.
+- **Pendências:** auditoria independente de segurança, testes de instabilidades/recovery, assinatura digital de EXE, política de atualizações de dependências, revisão de privacidade/LGPD e instalação Windows real.

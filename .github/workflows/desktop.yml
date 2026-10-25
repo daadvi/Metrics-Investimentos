@@ -26,6 +26,30 @@ jobs:
       - name: Instalar dependências
         run: npm install --no-audit --no-fund
 
+      - name: Verificar sintaxe dos componentes principais
+        run: |
+          node --check server.mjs
+          node --check src/store.mjs
+          node --check src/extensions.mjs
+          node --check src/instrument-classes.mjs
+          node --check src/foreign-ledger.mjs
+          node --check src/fx.mjs
+          node --check src/tax-dossier.mjs
+          node --check src/issuer-notices.mjs
+          node --check src/cvm-fii.mjs
+          node --check src/dividend-reconciliation.mjs
+          node --check src/cvm-quarterly.mjs
+          node --check src/brapi-dividends.mjs
+          node --check src/tax-audit-v13.mjs
+          node --check src/data-health-v13.mjs
+          node --check src/provider-hub.mjs
+          node --check src/cvm-ipe.mjs
+          node --check src/cvm-dfp.mjs
+          node --check src/fiscal-evidence-v14.mjs
+          node --check src/ai-tools.mjs
+          node --check web/app.js
+          node --check desktop/main.cjs
+
       - name: Executar testes
         run: npm test
 

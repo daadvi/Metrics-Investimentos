@@ -65,3 +65,21 @@ export async function fetchRecentB3Prices({wanted=[],daysBack=8,now=new Date(),f
  }
  throw Error('Não foi possível baixar uma cotação diária válida da B3. Importe um arquivo COTAHIST oficial ou informe preços manualmente.');
 }
+/** Extract all historical closes for explicitly selected instruments. For charting after confirmation. */
+export function parseCotahistSeries(input,{wanted=[]}={}){
+ const b=Buffer.isBuffer(input)?input:Buffer.from(input);
+ if(b.length>24*1024*1024)throw Error('Arquivo COTAHIST grande demais.');
+ const raw=b.subarray(0,2).toString()==='PK'?validZipEntry(b):b.toString('latin1');
+ const selected=new Set(wanted.map(tickerOf)),rows=[],latest=new Map();let count=0;
+ for(const line of raw.split(/\r?\n/)){
+  if(!line.startsWith('01')||line.length<245)continue;if(++count>MAX_ROWS)throw Error('COTAHIST excede o limite de registros.');
+  const d=line.slice(2,10),ticker=line.slice(12,24).trim(),market=line.slice(24,27),c=line.slice(108,121);
+  if(!validDay(d)||market!=='010'||!/^[0-9]{13}$/.test(c)||Number(c)===0||!ticker)continue;
+  if(selected.size&&!selected.has(ticker))continue;
+  const date=d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8),price=Number(c)/100;
+  if(price>0&&price<1e9){const q={ticker,date,price,source:'COTAHIST (fechamento sem ajustes)'};rows.push(q);const old=latest.get(ticker);if(!old||old.date<date)latest.set(ticker,q);}
+ }
+ if(!count)throw Error('COTAHIST sem dados válidos.');
+ if(rows.length>50000)throw Error('O arquivo possui mais de 50.000 preços da carteira. Importe um período menor.');
+ return {history:rows,quotes:[...latest.values()],records:count,warning:'Histórico de fechamentos não ajustados. Pode distorcer o retorno em desdobramentos e outros eventos corporativos.'};
+}

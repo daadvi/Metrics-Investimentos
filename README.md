@@ -1,167 +1,120 @@
-# Metrics Investimentos 0.4.0
+# Metrics Investimentos 1.4 RC1: APIs, CVM IPE/DFP, IA contextual e auditoria fiscal
 
-Aplicativo de gestão **local-first**, desenvolvido em Node.js e JavaScript, com IA híbrida opcional, dados persistidos em SQLite, importação de documentos financeiros e simulador de aportes.
+**Status: candidata beta, não certificada para investimentos, declaração de imposto ou tempo real.** O aplicativo é local-first e gratuito para executar; planos de provedores de dados e serviços de IA são contratados diretamente pelo usuário, se desejar.
 
-**Estado do projeto: BETA AVANÇADA / NÃO AUDITADA PARA PRODUÇÃO FINANCEIRA.** É possível administrar uma carteira manual e analisar os dados locais; não há conexão automática com B3, cotações ao vivo ou garantia de que todo relatório da B3 será reconhecido. Nunca use resultados automáticos sem conferir extratos e documentos oficiais.
+## Novidades principais
 
-**Custo obrigatório de serviços: R$ 0.** O projeto não depende de assinatura, mas requer computador compatível, Node.js 22.13+ e um navegador moderno. APIs externas podem cobrar pelo uso.
+- **Nova aba “APIs e provedores”**: obtenha chaves nos sites oficiais e cole no aplicativo apenas durante a sessão. Não são salvas no SQLite, arquivos de configuração nem logs do Metrics. Suporte com consultas explícitas a cotações **brapi, Alpha Vantage, HG Brasil, Dados de Mercado e Massive**. Resposta inclui moeda, data-base e atraso estimado. Os dados gratuitos não são dados necessariamente ao vivo.
+- **Proventos dos fornecedores**: Dados de Mercado, Alpha Vantage, HG Brasil e Massive, conforme planos e permissões da chave. Informações recebidas são **observações não verificadas oficialmente**; não geram pagamento, compra ou posição fictícia. Dados em USD ficam separados dos dados em BRL.
+- **Fontes B3**: portal empresarial de APIs exige contratação/autorização apropriada; nenhuma API pessoal de cotações ao vivo gratuitas é prometida. Continue importando os relatórios oficiais exportados, quando compatíveis, e dados históricos permitidos.
+- **CVM IPE**: índice de documentos de companhias abertas, selecionado por CNPJ e ticker. Importação local CSV/ZIP e botão de download anual quando o servidor CVM estiver acessível. O índice mostra categoria/data/arquivo; **não demonstra automaticamente valor de dividendos**.
+- **CVM DFP**: importar CSV/ZIP de balanço, demonstração do resultado e fluxo de caixa, preservando escala, períodos e natureza individual/consolidada. Não calcula indicadores a partir de unidades incompatíveis.
+- **IA híbrida**: instruções estruturadas e ferramentas de leitura de posições, desejos, fundamentos DFP, índice IPE, preços, proventos e pendências fiscais para modelos Ollama/OpenAI configurados. **Não treina automaticamente pesos ou fine-tuning de modelos externos**. Contexto privado só mediante autorização.
+- **Auditoria fiscal v14**: checklist de documentação, lacunas, operações e retificações, mais exportação XLSX de **12 abas** com evidências. A saída deliberadamente **não contém DARF nem imposto devido certificado**.
 
-## Instalando no Linux (Zorin, Ubuntu e derivados)
+## Instalação e cautela
 
-1. Instale Node.js **22.13 ou superior** e Chromium, Chrome ou Edge. Execute `node -v` para verificar.
-2. Extraia o arquivo ZIP em uma pasta de sua preferência.
-3. Abra um terminal dentro da pasta `metrics-investimentos-v0.4.0`.
-4. Execute `./instalar-linux.sh` para criar um atalho no menu e instalar em `~/.local/share/metrics-investimentos`.
-5. Abra **Metrics Investimentos** pelo menu do sistema.
+1. Faça backup criptografado de **cada** carteira da versão anterior.
+2. Para teste de código-fonte: instale Node.js >=22.13, execute `npm install`, `npm test` e `npm start`.
+3. Para distribuir o Windows `.exe`: extraia o pacote v1.4, execute `PUBLICAR_METRICS_V14.cmd` no Windows com Git e GitHub CLI autenticados, revise o diff e confirme publicando. Aguarde o GitHub Actions concluir os testes e disponibilizar um artefato do Windows; **este ZIP não contém `.exe` compilado**.
+4. Não envie arquivos pessoais, certificados, documentos fiscais, chaves, cookies ou bancos de dados ao repositório público.
+5. Antes de decisões reais, confira cotações e proventos em fontes confiáveis e o relatório fiscal com documentos originais.
 
-Também é possível executar `./metrics-desktop-linux.sh` sem instalar. Use `npm start` para abrir pelo lançador seguro, ou `node server.mjs` e copie a URL completa mostrada no terminal. O programa inicia um serviço em `127.0.0.1:4173` e abre uma janela de aplicativo no Chromium/Chrome. Ele utiliza Node.js e o navegador instalados; **não é um binário nativo Tauri e não é um APK**.
+Veja `PROVEDORES_CONFIGURACAO_v14.md`, `VALIDACAO_WINDOWS_v14.md` e `QUALITY_REPORT.md` para instruções, limitações e cobertura de testes.
 
-Se não houver Chromium/Chrome, execute `./iniciar-linux.sh` e use o endereço com código de acesso aberto pelo lançador ou exibido no terminal. Apenas `http://127.0.0.1:4173` não autoriza o acesso à API.
+---
 
-**Windows:** instale Node.js 22.13+, extraia o ZIP e execute `iniciar-windows.cmd`. O lançador abre o Metrics no navegador padrão. O pacote inclui código para compilar uma versão Electron portátil; o binário `.exe` não está pré-compilado neste ZIP.
+# Metrics Investimentos v1.3 RC1
 
-## Melhorias na versão 0.4
+**Release candidata: fontes trimestrais CVM, observações brapi v2 de proventos e auditoria de qualidade/fiscal.**
 
-- Importação de fechamentos históricos da B3 via COTAHIST ZIP/TXT e tentativa de atualização sob demanda pelo servidor público (sem assinatura). Não é feed ao vivo, não ajusta desdobramentos nem dividendos. A disponibilidade do endpoint varia.
-- Cotação por ativo inclui data e origem; não substitui preço mais recente por informação mais antiga.
-- Relatório fiscal auxiliar com custo médio, resultados de vendas, consolidação mensal, avisos de day trade provável e classificação incompleta. Não gera DARF, nem valida imposto devido.
-- Exportação XLSX genuína com quatro abas: posições, vendas, proventos e avisos. CSV e impressão continuam disponíveis.
-- Esqueleto Electron com medidas de isolamento do processo de renderização e workflow GitHub Actions para gerar instaladores Windows e Linux. **Dependências Electron e build nativo não validados neste ambiente.**
-- 41 testes automatizados, incluindo testes de API reais e planilhas reimportadas; ver QUALITY_REPORT.md.
+> É uma beta de software financeiro, não certificação de cotação ao vivo, recebimento de proventos ou Imposto de Renda. Use dados fictícios no teste inicial e confira documentos originais.
 
-## Mudanças relevantes da versão 0.3
+## Novidades validadas
 
-- **Acesso autenticado à API local:** a inicialização fornece um endereço temporário de acesso, cria cookie de sessão HttpOnly e bloqueia pedidos sem sessão. Evite compartilhar o endereço de inicialização com outras pessoas.
-- **Backup com senha:** o botão de exportação gera JSON protegido por AES-256-GCM e scrypt; exige senha de pelo menos 12 caracteres. Restaurar admite backups protegidos e os JSON legados (estes exigem confirmação adicional).
-- **Novo simulador Carteira futura:** até 12 ativos simultâneos, pesos somando 100%, 30 fases e 600 meses, cotas inteiras, caixa separado por ativo, reinvestimento parcial e exportação CSV. Desempenho baseado exclusivamente nas hipóteses preenchidas.
-- **Radar de integridade de fichas:** análise de vacância, dívida/PL e campos sem fonte ou data, sem notas inventadas ou recomendações.
-- **XLSX mais robusto:** suporte à estrutura ZIP por diretório central (incluindo arquivos com data descriptor); entradas/saídas genéricas e transferências NÃO viram compras e vendas automaticamente.
-- **Testes automatizados integrados:** início real do servidor, autorização, lançamentos, watchlist, simulação, importação, rejeição de duplicação e recuperação de backup.
+- Importar ZIP/CSV do informe trimestral FII da CVM, vinculando CNPJ e ticker manualmente. Extrai somente colunas reconhecidas e deixa ausências vazias; o arquivo enviado não é autenticado criptograficamente.
+- Consultar proventos de ações/FIIs via brapi v2, mediante chave e plano do próprio usuário; sandbox de FIIs aceita MXRF11/HGLG11 sem chave conforme a documentação. **Nunca são anúncios oficiais certificados.**
+- Marcar eventos provenientes de `backfilled from FiiMonthlyReports` como datas sintéticas, não como calendário de recebimentos confirmados.
+- Persistir observações de proventos separadas de eventos oficialmente comunicados/registrados. Não criar recebimento nem operação fictícia.
+- Verificar falta de histórico de preços desde a primeira compra, idade da fonte e cobertura documental por carteira.
+- Quadro fiscal mensal com valores de vendas, resultados matemáticos e avisos; **não gera imposto devido ou DARF**.
+- IA ganha quatro ferramentas de leitura: trimestre CVM, proventos de terceiros, fontes de dados e quadro fiscal de conferência; busca documental local com ranqueamento BM25 aproximado.
+- Menu lateral pode rolar em resoluções menores.
 
-**Atualização da versão 0.2:** preserve `~/.metrics-investimentos/metrics.sqlite` (e os arquivos associados enquanto o aplicativo estiver fechado). A v0.3 mantém a mesma estrutura de armazenamento; teste sua cópia de segurança antes de usar. A versão não cria uma nova carteira ao atualizar.
+## Instalação e publicação do Windows
 
-## Funcionalidades implementadas
+1. Faça **backup protegido com senha** da carteira atual.
+2. Extraia o ZIP e, no Windows com Git e GitHub CLI autenticados, execute `PUBLICAR_METRICS_V13.cmd`.
+3. Revise os arquivos para não enviar extratos, bancos, fotos, tokens nem dados pessoais a um repositório público. Confirme digitando `REVISAR` e depois `PUBLICAR`.
+4. Em `https://github.com/daadvi/Metrics-Investimentos/actions`, aguarde a compilação e teste o `.exe` antes de migrar dados reais.
+5. Para rodar o fonte localmente, utilize Node.js 22.13+ e o comando `npm start`; execute testes com `npm test`.
 
-- **Carteira manual:** compras, vendas, preço médio, taxas, dividendos, resultado realizado antes de impostos, histórico e exclusão de registros.
-- **SQLite local:** dados mantidos no computador, com migração dos dados existentes de `~/.metrics-investimentos/metrics.json` no primeiro uso.
-- **Preço manual por ativo:** valor estimado e resultado não realizado, com data e identificação explícita de que não é cotação ao vivo.
-- **Lista de desejos:** preço de interesse, prioridade, aporte pretendido, justificativa, edição e indicação local quando o preço informado manualmente chega ao alvo.
-- **Proventos:** histórico por ticker e por mês, com gráfico, tabela e relatório CSV.
-- **Agenda:** eventos futuros estimados ou informados como confirmados, lançados manualmente.
-- **Fichas de ativos:** tipo (FII tijolo/papel/híbrido, ações etc.), patrimônio, imóveis/operações, ocupação, vacância, gestão, dividend yield, dívidas, data-base e origem declarada. Dados preenchidos pelo usuário, não extraídos automaticamente de mercado.
-- **Simulador de ativo:** até 30 fases e 600 meses; dividendos com reinvestimento de 0% a 100%, cotas inteiras, caixa, inflação e hipóteses anuais de variação de preços e proventos. Exportação CSV.
-- **Importador B3:** leitura local de CSV/TSV e XLSX, reconhecendo cabeçalhos selecionados; prévia, linhas não identificadas, deduplicação, confirmação e desfazer por lote. Não pressupõe que toda movimentação é compra ou venda.
-- **PDF/TXT:** extração de texto e armazenamento de documento para contextualizar a IA, com título e data-base declarados.
-- **Metrics AI:** Ollama local, OpenAI com chave própria e resumo determinístico gratuito (identificado como sem LLM). Memória de conversas e autorização para contexto financeiro.
-- **Relatórios auxiliares:** operações por ano, posições, proventos, histórico completo em CSV, impressão para PDF e backup JSON/restauração.
-- **Segurança:** gateway somente em loopback com sessão por token temporário, cookie HttpOnly, controle de origem, confirmação de importações e nenhum envio de carteira sem permissão na IA.
+## Custos e privacidade
 
-## Como adicionar suas operações
+O produto não exige nova mensalidade e mantém os dados financeiros localmente. Ollama local pode exigir computador potente; provedores de IA e dados com chave própria podem cobrar. O valor de R$ 50 totais não cobre licenças comerciais de dados em tempo real, hardware nem assessoria fiscal.
 
-Em **Carteira**, cadastre uma compra com ticker, data, quantidade, preço unitário e taxas. Dividendos/JCP são lançados separadamente. Os resultados são calculados a partir dos registros efetivamente fornecidos. Se você não inseriu operações históricas, o preço médio e os relatórios não podem ser considerados completos.
+## Limites comprovados
 
-Em **Preços**, informe os valores observados e a data. O aplicativo não acessa preços automaticamente.
+- CVM mensal e trimestral: o endpoint e o parser foram testados com respostas e fixtures controladas; não conseguimos acessar a CVM ao vivo deste ambiente. O trimestre real pode conter outros nomes de coluna, por isso o importador deve sinalizar as ausências.
+- brapi v2: chamadas com estrutura documentada; não realizamos chamada de conta real paga; datas sintéticas não permitem declarar proventos confirmados.
+- Preços: provedor opcional sujeito a atraso; não são dados licenciados de tempo real.
+- Imposto: falta IRRF, saldos fiscais de abertura, compensações, day trade completo, exterior, renda fixa por informe e validação tributária por ano-calendário. Quadro novo NÃO é guia de pagamento nem valor definitivo para declaração.
+- Segurança: falta assinatura do executável e auditoria independente; extensão nativa `sqlite-vec` não foi adicionada devido à exigência de componentes binários e permissões extras. Em vez disso, a pesquisa usa ranking lexical local, que não exige acesso de terceiros aos documentos.
 
-Em **Lista de desejos**, inclua o que pretende comprar. Isso **não** se transforma em posição real.
+Consulte `QUALITY_REPORT.md`, `PLANO_FONTES_DADOS_v13.md` e `CHECKLIST_WINDOWS_v13.md` antes de publicar.
 
-## Importar documentos da B3
+---
 
-1. Na Área do Investidor, baixe um relatório em XLSX ou CSV; os formatos podem variar.
-2. Na aba **Importar B3**, selecione o documento.
-3. Revise quantas operações foram reconhecidas e quantas linhas serão ignoradas.
-4. Confirme somente depois de conferir. Importações repetidas são comparadas a lançamentos existentes; operações com os mesmos campos no mesmo dia podem ser tratadas como duplicadas (mesmo que tenham sido dois negócios legítimos), então revise o extrato.
-5. Se necessário, vá ao histórico e **desfaça o lote**.
+## Documentação da arquitetura anterior
 
-O importador reconhece alguns layouts com `Data`, `Produto` ou `Ticker`, `Movimentação` ou `Tipo`, `Quantidade`, `Preço unitário` e `Valor da Operação`. Em particular, transferências e liquidações ambíguas **não são transformadas automaticamente** em compras ou vendas. PDFs são importados apenas como documento, nunca convertidos silenciosamente em lançamentos.
+# Metrics Investimentos 1.2 RC1
 
-Para leitura de PDF, instale `pdftotext` pelo pacote `poppler-utils` (Linux) ou equivalente. PDF escaneado, sem texto, não possui OCR nesta versão.
+**Status:** versão candidata. A nova integração CVM é implementada e testada com arquivos representativos, mas **não validada com um arquivo oficial real nem com o executável Windows** neste ambiente.
 
-## Configurando a Metrics AI
+## Novidades
 
-**Modo sem LLM:** selecione `Resumo local, sem modelo`. Ele exibe os dados efetivamente calculados, mas não interpreta textos de forma generativa.
+- **Fontes e CVM:** nova aba para importar ZIP/CSV do Informe Mensal Estruturado de FII da CVM. O usuário deve informar um vínculo **CNPJ de 14 dígitos → ticker**. O Metrics não tenta identificar tickers por similaridade de nome.
+- **Download oficial sob demanda:** acesso restrito à URL anual do portal de dados abertos da CVM. Sem credenciais, sem busca geral na internet e com limites de arquivo e tempo.
+- **Fundamentos documentados:** patrimônio líquido, valor patrimonial por cota, cotistas e dividend yield mensal **somente quando existirem colunas correspondentes**. O sistema guarda data-base, eventual data de publicação, origem e alerta sobre a ausência de assinatura digital do arquivo.
+- **Conciliação de proventos:** cruza data-com, posição histórica elegível e proventos registrados; aponta inconsistências sem atribuir status oficial ao anúncio. Bonificações, grupamentos e desdobramentos posteriores a extratos entram no cálculo da quantidade elegível.
+- **Controle de defasagem das cotações:** indica se há preços, sua data, origem e idade. Dados de brapi com plano gratuito não são tempo real.
+- **Dossiê fiscal no fim do ano:** renda fixa com resgates e investimentos internacionais são avaliados **na data de 31/12**, sem usar movimentos futuros. Valores de renda fixa são provisórios e exigem informe da instituição.
+- **IA:** ferramentas de leitura dos fundamentos CVM importados, da conciliação dos proventos e da qualidade dos preços, sem modificar o banco.
 
-**Ollama:** instale [Ollama](https://ollama.com/), inicie-o e baixe um modelo compatível, por exemplo `ollama pull qwen2.5:3b`. Selecione `Ollama local` na aba Metrics AI e informe o identificador exato. Hardware modesto pode ter lentidão.
+## Instalação
 
-**API externa:** selecione OpenAI e informe sua chave apenas na sessão. **O aplicativo não grava a chave no SQLite.** As chamadas são cobradas, quando aplicável, diretamente pelo provedor.
+Node.js 22.13+, `npm install`, `npm start` (ou `iniciar-windows.cmd`). O executável portátil Windows deve ser compilado no GitHub Actions após publicar o código e **não acompanha este ZIP**. No Windows, confira `CHECKLIST_WINDOWS_v12.md` antes de substituir o aplicativo anterior.
 
-Marque **Incluir carteira, desejos, preços manuais e documentos relacionados** somente quando desejar que a IA use esses dados. Em modo externo, a informação autorizada será transmitida à empresa do modelo. O próprio modo local não possui internet autônoma nem consulta direta à CVM/B3. Documentos incorporados são fornecidos pelo usuário; a IA não valida automaticamente sua autenticidade.
+O banco local é SQLite. Para proteger a base de dados, configure uma senha de criptografia ou o mecanismo do launcher Electron conforme a documentação; **não pressuponha que o banco esteja criptografado por padrão em qualquer ambiente**. Faça backup **antes da atualização**.
 
-## Backup, criptografia e privacidade
+## Importar dados CVM
 
-Dados: `~/.metrics-investimentos/metrics.sqlite` no Linux ou `~/.metrics-investimentos/metrics.sqlite` sob o perfil de usuário no Windows. A pasta é criada com permissões restritas onde o sistema permite. A autenticação local reduz exposição acidental da API, mas não substitui criptografia completa do disco nem proteção do usuário do sistema.
+1. Acesse a aba **Fontes e CVM**.
+2. Informe o CNPJ **do fundo** e seu ticker, verificando o vínculo em documento oficial.
+3. Se tiver internet, clique em **Consultar CVM oficial** (arquivo anual da CVM). Alternativamente, baixe o arquivo anual ZIP em https://dados.cvm.gov.br/dataset/fii-doc-inf_mensal e selecione o ZIP local.
+4. Em **Prévia**, confirme quantos registros foram reconhecidos; clique em **Importar** para salvar.
+5. Confira a data-base e os campos. Se o CSV não tiver coluna de determinado indicador, o Metrics mostra **ausente**, nunca zero.
 
-**Por padrão o banco NÃO é criptografado. Backups exportados pela interface v0.3 SÃO criptografados.** Para uma instalação **nova** e criptografada, defina a variável de ambiente `METRICS_PASSPHRASE` antes da primeira inicialização. Os dados persistidos no SQLite são protegidos com AES-256-GCM a partir de chave derivada da senha com scrypt. Você precisará fornecer a mesma senha nas sessões posteriores. Não há recuperação de senha esquecida.
+**Importante:** o Informe Mensal CVM não fornece preços de mercado em tempo real ou todos os anúncios de proventos; alguns fundos podem não aparecer nos arquivos por diferenças de regime, prazo e estrutura de cadastro. Não confunda dado oficial **disponibilizado no site** com arquivo **fornecido manualmente** e ainda não autenticado.
 
-Para ativar criptografia em instalação já existente: faça **backup JSON** pela interface, feche o Metrics, copie/mova `metrics.sqlite` e arquivos `-wal`/`-shm` para um local seguro; inicialize um banco novo usando a senha e restaure o backup JSON na interface. **Não ative a senha simplesmente sobre o SQLite antigo não criptografado.**
+## Proventos e cotação
 
-Backups novos baixados pelo botão de exportação são cifrados com a senha escolhida. Backups antigos em JSON continuam legíveis e precisam ser protegidos. O app não sincroniza nem faz cópia automática fora da máquina. Use o botão **Restaurar backup** com cuidado, pois substitui o banco ativo.
+O Metrics reconcilia eventos informados com as operações gravadas na carteira. A natureza tributária e autenticidade do anúncio precisam ser verificadas. Para ações/FIIs, a integração opcional brapi usa chave própria e possui atraso conforme o plano. Para proventos oficiais em escala comercial, é preciso contratar fonte com cobertura e direitos de uso adequados.
 
-## Limitações importantes da versão 0.2
+## Imposto de Renda
 
-- **Ainda não disponível:** busca na web em tempo real, cotações oficiais automáticas, integração direta B3, classificação automática de todos os FIIs, análise automatizada de todas as páginas de todos os relatórios, recomendações reguladas, cálculo tributário completo, API de voz Wispr, execução em segundo plano quando o computador está desligado, aplicativo Android nativo ou binário Tauri assinado.
-- O cálculo de posições não contempla todos os eventos corporativos, desdobramentos, bonificações, amortizações, frações ou operações internacionais. Requer dados completos e correções antes de gerar relatório fiscal.
-- O modelo IA local ou externo pode errar ao interpretar relatórios; sempre verifique o documento e a data-base.
-- Resultados do simulador são **hipóteses matemáticas, não expectativas asseguradas**.
-- O importador XLSX suporta planilhas Office comuns, mas não todos os recursos avançados de arquivos Excel (macros, planilhas criptografadas, algumas variantes ZIP).
-- `node:sqlite` é um módulo experimental do Node.js 22; o arquivo deve ser testado e mantido em backup antes de usar para patrimônio real de longo prazo.
+O dossiê é **auxiliar**. Os valores se originam dos lançamentos confirmados; faltas de aquisição, compensações, IRRF, day trade e regras internacionais impedem apuração completa. Consulte o sistema oficial **ReVar** (https://www.gov.br/pt-br/servicos/apurar-imposto-sobre-renda-variavel), os informes de rendimentos e notas de corretagem. **Não copie números sem conciliação** e não trate este aplicativo como declaração transmitida ou aprovada pela Receita.
 
-## Testes e estrutura
+## Testes e limitações
 
-Execute `npm test` na pasta do projeto. O pacote inclui testes de domínio, importação, simulação, SQLite, permissões e análises locais.
+`npm test` executa as suítes existentes e as novas verificações CVM, datas de proventos, migração e fiscal. O ambiente confirmou **137/137** testes. Uma navegação da interface foi testada com Chromium e API local usando documento fictício. Não foram validados aqui: download ao vivo da CVM, feed de brapi pago, anúncios de proventos reais de cada emissor, IR completo, assinatura digital do EXE ou migração no Windows real.
 
-```text
-src/domain.mjs     - validações, posições, simulações e rendimentos
-src/store.mjs      - persistência SQLite, backup, importações e CRUD
-src/importers.mjs  - leitores CSV, XLSX e PDF com texto
-src/ai.mjs         - IA híbrida, contexto autorizado, relatórios locais
-server.mjs         - servidor loopback e APIs
-web/               - interface responsiva, estilos e PWA manifest
-instalar-linux.sh  - atalho e instalação por usuário
-metrics-desktop-linux.sh - inicialização em janela independente
-```
+## Arquivos importantes
 
-Projeto Apache-2.0. Todos os custos obrigatórios de licenças/serviços da v0.2 são zero, mas APIs opcionais, hardware, energia e operação não são gratuitos por definição. Antes de disponibilizar comercialmente, é necessária revisão regulatória e de segurança independente.
+- `QUALITY_REPORT.md`: resultado de testes, falhas conhecidas e cobertura.
+- `PLANO_FONTES_DADOS_v12.md`: alternativas oficiais e comerciais e as escolhas por custo/licença.
+- `CHECKLIST_WINDOWS_v12.md`: atualização do executável, backup e verificação.
+- `AGENTS.md`: orientações para continuar o trabalho no Codex.
+- `PUBLICAR_METRICS_V12.cmd`: revisão e publicação do código no GitHub. **Não envie bancos, chaves ou documentos pessoais ao repositório público.**
 
-## Auditoria de funcionamento e limites, versão 0.3
-
-O comando `npm test` executa verificações unitárias e uma integração real da API com banco temporário e XLSX de exemplo. Foi feito também um teste de interface em Chromium com respostas simuladas, verificando a navegação e o simulador multiativo sem erros JavaScript. O ambiente de validação bloqueou acesso HTTP direto pelo Chromium; **não foi completado um teste visual conectado ao backend real neste ambiente**. Isso deve ser repetido em Windows, Zorin e macOS antes de distribuir o aplicativo a investidores.
-
-Não testamos um modelo Ollama real, autenticação em um provedor de IA com chave válida, nem arquivos reais de todos os formatos exportados da B3. Portanto, essas integrações dependem de testes adicionais no equipamento do usuário.
-
-A aplicação ainda **não possui**: cotações atualizadas automaticamente, busca de documentos oficiais ao vivo, módulo tributário completo, auditoria independente de segurança, builds Tauri nativos, integração com Wispr Flow, cobertura confiável de todos os ativos globais ou notificações com o computador desligado. A IA não produz recomendações financeiras licenciadas. Apesar do progresso, não seria correto afirmar que o produto está 100% pronto para distribuição comercial.
-
-**Para registro financeiro real:** conferir operações importadas, extratos e proventos com as instituições, fazer backup protegido periodicamente, manter cópia externa confiável e revisar os relatórios fiscais com documentação oficial.
-
-
-## Instalador desktop (opcional, ainda não validado em hardware real)
-
-A execução local `npm start` continua a opção **validada pelo teste HTTP** e precisa de Node.js no dispositivo. Para construir um executável nativo com Electron 38 e electron-builder 26:
-
-```sh
-npm install --no-audit --no-fund
-npm run desktop:dev
-npm run desktop:build
-```
-
-O `desktop/main.cjs` cria um processo Node interno isolado e mantém as APIs acessíveis apenas em loopback. A configuração `electron-builder.json` prevê **AppImage no Linux** e **EXE portátil no Windows**. Uma ação do GitHub (`.github/workflows/desktop.yml`) está preparada para compilar esses formatos em runners com acesso à internet. Não há assinatura de código, testes de instalação em máquina real nem binários finais incluídos neste arquivo ZIP.
-
-Para priorizar o orçamento total de **R$ 50**, nenhuma licença ou serviço pago é obrigatório para executar localmente; o tempo de desenvolvimento, eventuais APIs externas e o hardware não estão incluídos.
-
-## Preços COTAHIST da B3
-
-No menu **Preços** escolha **Buscar último fechamento disponível** para tentar baixar um arquivo histórico diário diretamente da B3. Só são importados os tickers presentes em carteira ou na lista de desejos. Alternativamente, importe um arquivo oficial COTAHIST em ZIP ou TXT; confira a prévia antes de confirmar.
-
-**Atenção:** o arquivo contém preços de fechamento **históricos e não ajustados**. Não são preços em tempo real, e podem não refletir grupamentos, desdobramentos, direitos ou distribuições. O formato e a infraestrutura pública podem mudar e causar falha na consulta. Uma importação COTAHIST fornecida pelo usuário não tem autenticidade criptográfica verificada.
-
-Referências:
-- B3: https://www.b3.com.br/pt_br/market-data-e-indices/servicos-de-dados/market-data/historico/mercado-a-vista/cotacoes-historicas/
-- Layout: https://www.b3.com.br/data/files/33/67/B9/50/D84057102C784E47AC094EA8/SeriesHistoricas_Layout.pdf
-
-## Conciliação fiscal (auxiliar, não documento oficial)
-
-Classifique manualmente cada ticker em **Analisar**. No menu **Relatórios**, escolha o ano e clique em **Calcular resultados fiscais por mês**. O programa calcula volume vendido, custo proporcional ao preço médio registrado e resultado realizado por operação e mês. Exporta também CSV e Excel (.xlsx).
-
-**Não** gera DARF nem determina imposto devido: ainda faltam IRRF, compensação de prejuízos acumulados, eventos societários, day trade, regras de títulos não cobertos e conferência de todas as movimentações. Sem histórico completo anterior ao ano, o custo médio pode estar errado. Use com documentação da Receita e assessoria fiscal apropriada.
-
-- Receita Federal, bolsa: https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/pagamento/renda-variavel/bolsa-de-valores-1
-- Receita Federal, FIIs: https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/pagamento/renda-variavel/fundos-de-investimento-no-brasil
+Licença: **Apache-2.0**, conforme `LICENSE`.

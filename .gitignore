@@ -22,3 +22,5 @@ data/
 *.csv
 *.pdf
 !test/fixtures/b3-exemplo.xlsx
+
+!test/fixtures/b3-carteira-exemplo.pdf

@@ -1,12 +1,12 @@
 {
   "name": "metrics-investimentos",
-  "version": "0.4.0",
+  "version": "1.4.0-rc.1",
   "private": true,
   "type": "module",
-  "description": "Metrics Investimentos local-first, B3 COTAHIST, IA híbrida, importação e relatório fiscal auxiliar",
+  "description": "Metrics v1.4 RC1: provedores BYOK, CVM IPE, memória financeira e dossiê de evidências",
   "scripts": {
     "start": "node launcher.mjs",
-    "test": "node --test --test-concurrency=1 test/ai.test.mjs test/api-e2e.test.mjs test/domain.test.mjs test/extended.test.mjs test/store.test.mjs test/v03.test.mjs test/v04-api.test.mjs test/v04-export.test.mjs test/v04-market-tax.test.mjs",
+    "test": "node --test --test-concurrency=1 test/ai.test.mjs test/api-e2e.test.mjs test/domain.test.mjs test/extended.test.mjs test/store.test.mjs test/v03.test.mjs test/v04-api.test.mjs test/v04-export.test.mjs test/v04-market-tax.test.mjs test/v05-integrity.test.mjs test/v05-security.test.mjs test/v06-api.test.mjs test/v06-market-history.test.mjs test/v1-api.test.mjs test/v1-community.test.mjs test/v1-core.test.mjs test/v1-document-backup.test.mjs test/v1-edit-undo.test.mjs test/v11-api-e2e.test.mjs test/v11-multiasset-fiscal.test.mjs test/v12-api.test.mjs test/v12-cvm-proventos.test.mjs test/v13-integrations.test.mjs test/v14-provider-ipe.test.mjs test/v14-integration.test.mjs test/v14-dfp.test.mjs",
     "desktop:dev": "electron .",
     "desktop:build": "electron-builder --config electron-builder.json"
   },
@@ -18,5 +18,8 @@
   "devDependencies": {
     "electron": "^38.0.0",
     "electron-builder": "^26.0.0"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^6.4.299"
   }
 }

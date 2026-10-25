@@ -25,6 +25,6 @@ test('API 0.4: sessão, classificação fiscal, mercado B3 e Excel real', {timeo
   const saved=await go('/api/market/import','POST',{name:'COTAHIST_D23102026.TXT',data:sample.toString('base64')});assert.equal(saved.updated,1);
   const state=await go('/api/state');assert.equal(state.quotes[0].source,'B3 COTAHIST (fechamento, sem ajustes)');
   const excel=await go('/api/report/xlsx?year=2026');const xlsx=parseXLSX(Buffer.from(excel.base64,'base64'));
-  assert.equal(xlsx.length,4);assert.equal(xlsx[1].rows[1][1],'GGRC11');
+  assert.equal(xlsx.length,12);assert.equal(xlsx[1].rows[1][1],'GGRC11');
  }finally{child.kill('SIGTERM');await rm(dir,{recursive:true,force:true});}
 });
