@@ -1,3 +1,5 @@
+import {expectedMetricsVersion} from './helpers/expected-metrics-version.mjs';
+import {stopAndRemove} from './helpers/windows-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
@@ -13,7 +15,7 @@ test('v1.2 API completa: CVM CSV, conciliação de rendimentos, isolamento de ca
   assert.equal((await fetch(origin+'/api/official/cvm')).status,401);
   const auth=await fetch(launch,{redirect:'manual'}),cookie=auth.headers.get('set-cookie').split(';')[0];let activeId=null;
   const api=async(path,method='GET',data,status=200)=>{const r=await fetch(origin+path,{method,headers:{cookie,'x-metrics-local':'1',...(activeId?{'x-metrics-portfolio-id':activeId}:{}),...(data?{'content-type':'application/json'}:{})},body:data?JSON.stringify(data):undefined});const raw=await r.text();assert.equal(r.status,status,raw.slice(0,500));return JSON.parse(raw);};
-  assert.equal((await api('/api/health')).version,'1.4.0-rc.1');
+  assert.equal((await api('/api/health')).version,expectedMetricsVersion);
   await api('/api/transactions','POST',{ticker:'MXRF11',type:'BUY',date:'2026-01-01',quantity:10,price:10},201);
   await api('/api/transactions','POST',{ticker:'MXRF11',type:'DIVIDEND',date:'2026-09-10',amount:1.0},201);
   await api('/api/events','POST',{ticker:'MXRF11',date:'2026-09-10',recordDate:'2026-09-01',perShare:0.1,kind:'CONFIRMADO',source:'Documento registrado'},201);
@@ -30,5 +32,5 @@ test('v1.2 API completa: CVM CSV, conciliação de rendimentos, isolamento de ca
   assert.equal((await api('/api/official/cvm')).observations,0);
   assert.equal((await api('/api/income/reconcile')).events.length,0);
   assert.equal((await api('/api/data/coverage')).quotes.length,0);
- }finally{child.kill('SIGTERM');await rm(dir,{recursive:true,force:true});}
+ }finally{await stopAndRemove(child,dir);}
 });

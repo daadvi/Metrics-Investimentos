@@ -10,7 +10,6 @@
     "server.mjs",
     "src/**",
     "web/**",
-    "community-examples/**",
     "package.json",
     "node_modules/pdfjs-dist/**",
     "LICENSE",

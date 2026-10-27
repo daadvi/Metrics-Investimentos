@@ -6,6 +6,7 @@ const path=require('node:path');
 const fs=require('node:fs');
 const crypto=require('node:crypto');
 const net=require('node:net');
+let allowedOrigin=null; // Restrict desktop navigation to the launched Metrics server
 let backend=null,win=null,opened=false;
 function osProtectedKey(){
  // DPAPI on Windows, macOS Keychain and a non-basic secure store on supported Linux systems.
@@ -32,7 +33,7 @@ function launch(){
  backend.stdout.on('data',c=>{
   buffer+=c.toString();if(buffer.length>4000)buffer=buffer.slice(-2500);
   const m=buffer.match(/METRICS_LAUNCH_URL=(http:\/\/127\.0\.0\.1:\d+\/\?access=[a-f0-9]+)/);
-  if(m&&!opened){opened=true;clearTimeout(timeout);win.loadURL(m[1]);}
+  if(m&&!opened){opened=true;allowedOrigin=new URL(m[1]).origin;clearTimeout(timeout);win.loadURL(m[1]);}
  });
  backend.stderr.on('data',d=>console.error('Metrics backend:',d.toString().slice(0,300)));
  backend.once('exit',code=>{if(!app.isQuitting){dialog.showErrorBox('Metrics','Servidor local finalizado inesperadamente ('+code+').');app.quit();}});
@@ -47,7 +48,7 @@ app.whenReady().then(()=>{
    if(approved)shell.openExternal(url);
   }
  }catch{}return {action:'deny'};});
- win.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('http://127.0.0.1:'))event.preventDefault();});
+ for(const kind of ['will-navigate','will-redirect'])win.webContents.on(kind,(event,url)=>{try{if(!allowedOrigin||new URL(url).origin!==allowedOrigin)event.preventDefault();}catch{event.preventDefault();}});
  session.defaultSession.setPermissionRequestHandler((_wc,_permission,callback)=>callback(false));
  win.on('closed',()=>app.quit());
  try{launch();}catch(e){dialog.showErrorBox('Metrics - dados protegidos',String(e.message||e));app.quit();}

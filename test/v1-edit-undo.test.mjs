@@ -1,3 +1,4 @@
+import {stopAndRemove} from './helpers/windows-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn,spawnSync} from 'node:child_process';
@@ -18,7 +19,7 @@ async function server(){
  const api=async(route,{method='GET',data,portfolioId,local=true}={})=>{
  const response=await fetch(base+route,{method,headers:{Cookie:cookie,...(local?{'X-Metrics-Local':'1'}:{}),...(portfolioId?{'X-Metrics-Portfolio-ID':portfolioId}:{}),...(data!==undefined?{'Content-Type':'application/json'}:{})},body:data!==undefined?JSON.stringify(data):undefined});
  return {status:response.status,data:await response.json()};};
- return {dir,child,api,close:async()=>{child.kill('SIGTERM');await rm(dir,{recursive:true,force:true});}};
+ return {dir,child,api,close:async()=>{await stopAndRemove(child,dir);}};
 }
 const buy=(ticker,quantity,date='2026-01-10',price=10)=>({type:'BUY',ticker,quantity,date,price,fee:0});
 const sell=(ticker,quantity,date='2026-02-10',price=12)=>({type:'SELL',ticker,quantity,date,price,fee:0});

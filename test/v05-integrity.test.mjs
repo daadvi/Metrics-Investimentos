@@ -1,3 +1,4 @@
+import {stopAndRemove} from './helpers/windows-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -92,5 +93,5 @@ test('v0.5: API PDF B3 > snapshot > IA/contexto > relatórios auxiliares', {time
   const facts=await go('/api/insights');assert.equal(facts.custodyStatement.positions[0].ticker,'MXRF11');assert.equal(facts.summary.holdingCost,0);
   const tax=await go('/api/fiscal-readiness?year=2026');assert.equal(tax.readiness,'REVISÃO_OBRIGATÓRIA');assert.ok(tax.issues.some(x=>x.includes('Extratos de posição')));
   await go('/api/snapshots/'+created.snapshot.id,'DELETE');assert.equal((await go('/api/state')).snapshots.length,0);
- }finally{child.kill('SIGTERM');await rm(tmp,{force:true,recursive:true});}
+ }finally{await stopAndRemove(child,tmp);}
 });

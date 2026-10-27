@@ -38,7 +38,7 @@ async function extractWithPdfJs(bytes){
    if(text.length>MAX_CHARS)throw Error('PDF possui texto excessivamente longo.');
   }
   return {text,pages:pdf.numPages,reader:'Mozilla PDF.js'};
- }finally{await pdf.destroy();}
+ }finally{await task.destroy();}
 }
 function fallbackPoppler(bytes){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'metrics-pdf-'));const input=path.join(dir,'documento.pdf');
  try{fs.writeFileSync(input,bytes,{mode:0o600});const result=spawnSync('pdftotext',['-layout',input,'-'],{encoding:'utf8',timeout:20000,maxBuffer:MAX_CHARS*3});

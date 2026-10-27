@@ -1,3 +1,5 @@
+import {expectedMetricsVersion} from './helpers/expected-metrics-version.mjs';
+import {stopAndRemove} from './helpers/windows-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
@@ -13,7 +15,7 @@ test('v0.6 API: compras > histórico de fechamento > CDI > evolução, sem chave
   let capture='';const launch=await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('Servidor não iniciou')),8000);const onChunk=b=>{capture+=b.toString();const m=capture.match(/METRICS_LAUNCH_URL=(\S+)/);if(m){clearTimeout(timeout);resolve(m[1]);}};child.stdout.on('data',onChunk);child.stderr.on('data',onChunk);});
   const base=`http://127.0.0.1:${port}`,login=await fetch(launch,{redirect:'manual'}),cookie=login.headers.get('set-cookie').split(';')[0];
   const api=async(route,method='GET',data,expect=200)=>{const r=await fetch(base+route,{method,headers:{cookie,'x-metrics-local':'1',...(data==null?{}:{'content-type':'application/json'})},body:data==null?undefined:JSON.stringify(data)});assert.equal(r.status,expect,route+' responded '+r.status+' '+await r.clone().text());return r.json();};
-  const health=await api('/api/health');assert.equal(health.version,'1.4.0-rc.1');
+  const health=await api('/api/health');assert.equal(health.version,expectedMetricsVersion);
   await api('/api/transactions','POST',{ticker:'MXRF11',type:'BUY',date:'2026-10-22',quantity:10,price:10},201);
   const file=Buffer.from('00'+'.'.repeat(243)+'\n'+line('MXRF11','20261022',1000)+'\n'+line('MXRF11','20261023',1100)+'\n99'+'.'.repeat(243)+'\n','latin1');
   const imported=await api('/api/market/import','POST',{name:'COTAHIST_D23102026.TXT',data:file.toString('base64')});assert.equal(imported.historical.total,2);
@@ -23,5 +25,5 @@ test('v0.6 API: compras > histórico de fechamento > CDI > evolução, sem chave
   const state=await api('/api/state');assert.equal(state.quoteHistoryStats.observations,2);
   const fiscal=await api('/api/fiscal-readiness?year=2026');assert.equal(fiscal.readiness,'REVISÃO_OBRIGATÓRIA');
   const bad=await api('/api/market/provider-refresh','POST',{key:''},400);assert.match(bad.error,/configure sua chave/i);
- }finally{child.kill('SIGTERM');await rm(dir,{recursive:true,force:true});}
+ }finally{await stopAndRemove(child,dir);}
 });

@@ -1,3 +1,5 @@
+import {expectedMetricsVersion} from './helpers/expected-metrics-version.mjs';
+import {stopAndRemove} from './helpers/windows-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
@@ -12,7 +14,7 @@ test('API multiativos: segregação internacional, renda fixa, câmbio, fiscais,
   const base=`http://127.0.0.1:${port}`;assert.equal((await fetch(base+'/api/asset-classes')).status,401);
   const login=await fetch(launch,{redirect:'manual'}),cookie=login.headers.get('set-cookie').split(';')[0];let portfolioId=null;
   const api=async(u,m='GET',data,status=200)=>{const r=await fetch(base+u,{method:m,headers:{cookie,'x-metrics-local':'1',...(portfolioId?{'x-metrics-portfolio-id':portfolioId}:{}),...(data===undefined?{}:{'content-type':'application/json'})},body:data===undefined?undefined:JSON.stringify(data)});const msg=await r.text();assert.equal(r.status,status,`${u} ${msg.slice(0,500)}`);return JSON.parse(msg);};
-  assert.equal((await api('/api/health')).version,'1.4.0-rc.1');
+  assert.equal((await api('/api/health')).version,expectedMetricsVersion);
   await api('/api/instruments','POST',{ticker:'AAPL',assetClass:'STOCK_FOREIGN',currency:'USD'},201);
   const refused=await api('/api/transactions','POST',{ticker:'AAPL',type:'BUY',date:'2026-03-01',quantity:2,price:100},400);assert.match(refused.error,/moeda estrangeira/i);
   await api('/api/foreign/trades','POST',{ticker:'AAPL',type:'BUY',date:'2026-03-01',currency:'USD',quantity:2,price:100},201);
@@ -38,5 +40,5 @@ test('API multiativos: segregação internacional, renda fixa, câmbio, fiscais,
   const newly=await api('/api/portfolios','POST',{name:'Carteira separada'},201);
   portfolioId=newly.portfolio.id;
   assert.equal((await api('/api/state')).foreignTrades.length,0);assert.equal((await api('/api/asset-classes')).fixedIncome.positions.length,0);assert.equal((await api('/api/tax/dossier?year=2025')).incomeDiscrepancies.length,0);
- }finally{child.kill('SIGTERM');await rm(dir,{recursive:true,force:true});}
+ }finally{await stopAndRemove(child,dir);}
 });

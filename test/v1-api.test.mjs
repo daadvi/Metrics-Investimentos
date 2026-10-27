@@ -1,3 +1,5 @@
+import {expectedMetricsVersion} from './helpers/expected-metrics-version.mjs';
+import {stopAndRemove} from './helpers/windows-cleanup.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';import {mkdtemp,rm} from 'node:fs/promises';import net from 'node:net';import os from 'node:os';import path from 'node:path';import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -9,7 +11,7 @@ test('Metrics v1: fluxo API: autenticação, histórico, evento corporativo, ren
   const base=`http://127.0.0.1:${port}`,denied=await fetch(base+'/api/radar');assert.equal(denied.status,401);
   const token=await fetch(launch,{redirect:'manual'}),cookie=token.headers.get('set-cookie').split(';')[0];
   const api=async(url,method='GET',data,expected=200)=>{const r=await fetch(base+url,{method,headers:{Cookie:cookie,'X-Metrics-Local':'1',...(data?{'Content-Type':'application/json'}:{})},body:data?JSON.stringify(data):undefined});const text=await r.text();assert.equal(r.status,expected,`${url} (${r.status}): ${text.slice(0,350)}`);return JSON.parse(text);};
-  assert.equal((await api('/api/health')).version,'1.4.0-rc.1');
+  assert.equal((await api('/api/health')).version,expectedMetricsVersion);
   await api('/api/transactions','POST',{type:'BUY',ticker:'MXRF11',date:'2025-01-01',quantity:10,price:10},201);
   await api('/api/transactions','POST',{type:'SPLIT',ticker:'MXRF11',date:'2025-05-01',factor:2},201);
   const s=await api('/api/state');assert.equal(s.summary.positions[0].quantity,20);assert.equal(s.summary.positions[0].average,5);
@@ -23,5 +25,5 @@ test('Metrics v1: fluxo API: autenticação, histórico, evento corporativo, ren
   const tax=await api('/api/fiscal-readiness?year=2026');assert.equal(tax.readiness,'REVISÃO_OBRIGATÓRIA');
   const xlsx=await api('/api/report/xlsx?year=2026');assert.ok(xlsx.base64.length>1000);
   const exported=await api('/api/export');assert.equal(exported.settings.monthlyIncomeGoal,1000);assert.equal(exported.providerResearch.length,1);
- }finally{child.kill('SIGTERM');await rm(dir,{recursive:true,force:true});}
+ }finally{await stopAndRemove(child,dir);}
 });

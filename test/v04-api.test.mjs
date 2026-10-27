@@ -1,3 +1,4 @@
+import {stopAndRemove} from './helpers/windows-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
@@ -26,5 +27,5 @@ test('API 0.4: sessão, classificação fiscal, mercado B3 e Excel real', {timeo
   const state=await go('/api/state');assert.equal(state.quotes[0].source,'B3 COTAHIST (fechamento, sem ajustes)');
   const excel=await go('/api/report/xlsx?year=2026');const xlsx=parseXLSX(Buffer.from(excel.base64,'base64'));
   assert.equal(xlsx.length,12);assert.equal(xlsx[1].rows[1][1],'GGRC11');
- }finally{child.kill('SIGTERM');await rm(dir,{recursive:true,force:true});}
+ }finally{await stopAndRemove(child,dir);}
 });

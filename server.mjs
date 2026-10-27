@@ -1,3 +1,19 @@
+// Metrics 2.4: additions scoped to the selected wallet. The 1.4 baseline remains intact.
+import {inspectOfficialIPE,consolidatedWealth,consolidatedEvolution,fiscalByYear,validateExternalFlow,validateValuation,validateProfessionalReview} from './src/metrics-v24.mjs';
+import {calculatePositions as positionsMetrics24} from './src/domain.mjs';
+import {fixedIncomePosition as fixedPositionMetrics24} from './src/instrument-classes.mjs';
+import {change as changeMetrics24} from './src/store.mjs';
+import {auditQuality25} from './src/metrics-v24.mjs';
+import {analyzePortfolio26,compareProfiles26} from './src/metrics-v26.mjs';
+import {storageCacheStatus26} from './src/store.mjs';
+import {createHistoryPager27} from './src/history-pager-v27.mjs';
+import {computePerformance27,validateFlowCoverage27} from './src/performance-v27.mjs';
+import {previewImport27,reconcileImport27} from './src/import-reconcile-v27.mjs';
+import {storageStatus27,migrateStorage27,change as changeStorage27} from './src/store.mjs';
+const metricsPager27=createHistoryPager27();
+import {previewStatement28,reconcileStatement28,validateStatementReview28} from './src/statement-reconciliation-v28.mjs';
+import {performanceEvidence28,validatePortfolioValuation28} from './src/return-evidence-v28.mjs';
+import {historyPage28,change as changeStore28} from './src/store.mjs';
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -54,7 +70,103 @@ async function handler(req,res){const url=new URL(req.url,ORIGIN);
  if(url.pathname.startsWith('/api/'))return withPortfolio(req.headers['x-metrics-portfolio-id'],async()=>{
  try{
   if(['POST','PUT','DELETE'].includes(req.method)&&req.headers['x-metrics-local']!=='1')return reply(res,403,{error:'Cabeçalho de acesso local obrigatório.'});
-  if(req.method==='GET'&&url.pathname==='/api/state'){const db=await read();return reply(res,200,{transactions:db.transactions,instruments:db.instruments||[],fixedIncome:db.fixedIncome||[],foreignTrades:db.foreignTrades||[],foreignAudit:(db.foreignAudit||[]).slice(-15).map(({before,after,...rest})=>({...rest,ticker:(after||before)?.ticker})),foreignPositions:foreignPositions(db.foreignTrades),fxRates:db.fxRates||[],taxEvidence:db.taxEvidence||[],foreignMarketQuotes:db.foreignMarketQuotes||[],providerDividendFeed:(db.providerDividendFeed||[]).slice(-200),ipeIndex:(db.ipeIndex||[]).slice(0,150),cvmStatementsCount:(db.cvmStatements||[]).length,notices:db.notices||[],transactionAudit:(db.transactionAudit||[]).slice(-30).map(({before,after,...item})=>({...item,ticker:(after||before)?.ticker,type:(after||before)?.type})),watchlist:db.watchlist,messages:db.messages,quotes:db.quotes,profiles:db.profiles,events:db.events,snapshots:db.snapshots||[],documents:docsList(db),imports:db.imports,cvmReports:(db.cvmReports||[]).length,quoteHistoryStats:{observations:(db.quoteHistory||[]).length,firstDate:db.quoteHistory?.length?[...db.quoteHistory].sort((a,b)=>a.date.localeCompare(b.date))[0].date:null,lastDate:db.quoteHistory?.length?[...db.quoteHistory].sort((a,b)=>b.date.localeCompare(a.date))[0].date:null},benchmarkDays:(db.benchmarkCDI||[]).length,settings:db.settings,summary:portfolioTotals(db.transactions),analytics:portfolioAnalytics(db.transactions,db.quotes),dataLocation:location(),encrypted:isEncrypted()});}
+  // Metrics 2.4: provenance checking only; NEVER create a cash receipt from a disclosure.
+  if(req.method==='GET'&&url.pathname==='/api/v24/official-checks'){
+   const db=await read();return reply(res,200,{checks:db.officialChecks||[],warning:'Origem de arquivo consultada, não certificação de provento.'});
+  }
+  if(req.method==='POST'&&url.pathname==='/api/v24/official-check'){
+   const request=await body(req,8*1024);const source=await read();
+   const found=await inspectOfficialIPE(source,{...request,fetchImpl:fetch,extractPdf:readPdf});
+   const stored=await changeMetrics24(db=>{
+    if(!(db.ipeIndex||[]).some(x=>x.documentId===found.documentId&&x.ticker===found.ticker&&x.sourceUrl===found.sourceUrl))throw Error('Documento IPE deixou de fazer parte desta carteira.');
+    const current=(db.officialChecks||[]).find(x=>x.documentId===found.documentId&&x.sha256===found.sha256&&x.ticker===found.ticker);
+    if(current)return current;
+    const record={...found,id:randomBytes(16).toString('hex')};db.officialChecks.push(record);
+    if(db.officialChecks.length>300)db.officialChecks=db.officialChecks.slice(-300);
+    return record;
+   });return reply(res,200,{check:stored});
+  }
+  if(req.method==='POST'&&url.pathname==='/api/v24/official-review'){
+   const input=await body(req,12*1024);const status=String(input.status||'');const note=String(input.note||'').trim();
+   if(!['CONFIRMED_BY_USER','DISMISSED'].includes(status)||note.length<12||note.length>900)throw Error('Revisão exige decisão e justificativa de 12 a 900 caracteres.');
+   const check=await changeMetrics24(db=>{const entry=(db.officialChecks||[]).find(x=>x.id===input.id);if(!entry)throw Error('Documento não encontrado nesta carteira.');if(entry.reviewStatus!=='PENDING')throw Error('Documento já revisado; gere nova inspeção para outra versão.');entry.reviewStatus=status;entry.reviewNote=note;entry.reviewedAt=new Date().toISOString();return entry;});
+   return reply(res,200,{check,warning:'Confirmação manual não prova autorização, titularidade nem recebimento; nenhum provento foi creditado.'});
+  }
+  const wealthHelpersV24={calculatePositions:positionsMetrics24,foreignPositions,fixedIncomePosition:fixedPositionMetrics24};
+  if(req.method==='GET'&&url.pathname==='/api/v24/patrimony'){
+   return reply(res,200,consolidatedWealth(await read(),{asOf:url.searchParams.get('date')||new Date().toISOString().slice(0,10),...wealthHelpersV24}));
+  }
+  if(req.method==='GET'&&url.pathname==='/api/v24/evolution'){
+   const count=Number(url.searchParams.get('months')||12);return reply(res,200,consolidatedEvolution(await read(),{asOf:url.searchParams.get('date')||new Date().toISOString().slice(0,10),months:count,...wealthHelpersV24}));
+  }
+  if(req.method==='POST'&&url.pathname==='/api/v24/external-flow'){
+   const input=validateExternalFlow(await body(req,12*1024));const created=await changeMetrics24(db=>{const r={...input,id:randomBytes(16).toString('hex'),createdAt:new Date().toISOString()};db.externalFlows.push(r);return r;});return reply(res,201,{created});
+  }
+  if(req.method==='POST'&&url.pathname==='/api/v24/valuation'){
+   const input=validateValuation(await body(req,12*1024));const created=await changeMetrics24(db=>{const r={...input,id:randomBytes(16).toString('hex'),createdAt:new Date().toISOString()};db.assetValuations.push(r);return r;});return reply(res,201,{created});
+  }
+  if(req.method==='DELETE'&&/^\/api\/v24\/(external-flow|valuation)\/[a-f0-9]{32}$/.test(url.pathname)){
+   const parts=url.pathname.split('/'),which=parts[3]==='external-flow'?'externalFlows':'assetValuations',id=parts[4];
+   const result=await changeMetrics24(db=>{const old=db[which].length;db[which]=db[which].filter(x=>x.id!==id);if(db[which].length===old)throw Error('Registro não encontrado.');return {removed:id};});return reply(res,200,result);
+  }
+  if(req.method==='GET'&&url.pathname==='/api/v24/tax-case'){
+   return reply(res,200,fiscalByYear(await read(),url.searchParams.get('year')||new Date().getFullYear(),{taxDossier,realizedLedger}));
+  }
+  if(req.method==='POST'&&url.pathname==='/api/v24/tax-review'){
+   const input=validateProfessionalReview(await body(req,16*1024));
+   const review=await changeMetrics24(db=>{const r={...input,id:randomBytes(16).toString('hex'),reviewedAt:new Date().toISOString()};db.taxReviews.push(r);return r;});
+   return reply(res,201,{review,warning:'Registro de revisão declarada pelo usuário. O software não autentica qualificação do profissional ou validade do parecer.'});
+  }
+  if(req.method==='GET'&&url.pathname==='/api/v25/audit'){const d=await read();return reply(res,200,auditQuality25(d,{calculatePositions:positionsMetrics24,foreignPositions,fixedIncomePosition:fixedPositionMetrics24}));}
+  // Metrics 2.6: one wallet-scoped data read per analysis, never external telemetry.
+  if(req.method==='GET'&&url.pathname==='/api/v26/analytics'){
+   const date=url.searchParams.get('date')||new Date().toISOString().slice(0,10);
+   const year=url.searchParams.get('year')||Number(date.slice(0,4));
+   return reply(res,200,analyzePortfolio26(await read(),{asOf:date,year,calculatePositions:positionsMetrics24,foreignPositions,fixedIncomePosition:fixedPositionMetrics24}));
+  }
+  if(req.method==='GET'&&url.pathname==='/api/v26/compare'){
+   const tickers=String(url.searchParams.get('tickers')||'').split(',').filter(Boolean);
+   return reply(res,200,compareProfiles26(await read(),{tickers}));
+  }
+  if(req.method==='GET'&&url.pathname==='/api/v26/system'){
+   const nodeVersion=process.versions.node,parts=nodeVersion.split('.').map(Number);
+   const nodeCompatible=parts[0]>22||(parts[0]===22&&parts[1]>=13);
+   return reply(res,200,{version:'2.8.0-preview.1',platform:process.platform,nodeVersion,nodeCompatible,storageCache:storageCacheStatus26(),desktopRuntime:process.env.ELECTRON_RUN_AS_NODE==='1',warning:'A verificação não confirma backups, compilação Windows, extratos ou certificados fiscais. As etapas do guia exigem confirmação manual.'});
+  }
+  // Metrics v2.7: controlled pagination and read-only import reconciliation.
+  if(req.method==='GET'&&url.pathname==='/api/v27/history')return reply(res,200,metricsPager27.page(await read(),{kind:url.searchParams.get('kind')||'transactions',limit:Number(url.searchParams.get('limit')||40),cursor:url.searchParams.get('cursor')||null,portfolioId:String(req.headers['x-metrics-portfolio-id']||'active'),from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||'',ticker:url.searchParams.get('ticker')||''}));
+  if(req.method==='GET'&&url.pathname==='/api/v27/storage')return reply(res,200,{...storageStatus27(),warning:'Migração exige backup verificado. O aplicativo não migra automaticamente.'});
+  if(req.method==='POST'&&url.pathname==='/api/v27/storage/migrate'){const p=await body(req);return reply(res,200,await migrateStorage27(p.confirmation));}
+  if(req.method==='GET'&&url.pathname==='/api/v27/performance')return reply(res,200,computePerformance27(await read(),{asOf:url.searchParams.get('date')||new Date().toISOString().slice(0,10),months:Number(url.searchParams.get('months')||12),calculatePositions:positionsMetrics24,foreignPositions,fixedIncomePosition:fixedPositionMetrics24}));
+  if(req.method==='POST'&&url.pathname==='/api/v27/flows/confirm'){
+   const coverage=validateFlowCoverage27(await body(req));const outcome=await changeStorage27(db=>{db.flowReconciliations||=[];if(db.flowReconciliations.length>=200)throw Error('Limite de revisões de fluxos alcançado.');db.flowReconciliations.push(coverage);return coverage;});return reply(res,201,{coverage:outcome,note:'Cobertura declarada pelo usuário; não auditada pelo Metrics.'});
+  }
+  if(req.method==='POST'&&url.pathname==='/api/v27/import/preview')return reply(res,200,previewImport27(await body(req,2_200_000)));
+  if(req.method==='POST'&&url.pathname==='/api/v27/import/reconcile'){const p=await body(req,1_000_000);return reply(res,200,reconcileImport27(await read(),p.candidates));}
+  // Metrics v2.8: SQL keyset history, light dashboard and auditable evidence-bound returns.
+  if(req.method==='GET'&&url.pathname==='/api/v28/history')return reply(res,200,historyPage28({kind:url.searchParams.get('kind')||'transactions',limit:Number(url.searchParams.get('limit')||40),cursor:url.searchParams.get('cursor')||null,from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||'',ticker:url.searchParams.get('ticker')||''}));
+  if(req.method==='GET'&&url.pathname==='/api/v28/dashboard'){
+   const d=await read(),recent=[...(d.transactions||[])].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6);
+   const events=(d.events||[]).filter(e=>e.date>=new Date().toISOString().slice(0,10)).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,4);
+   const last=[...(d.snapshots||[])].sort((a,b)=>b.asOf.localeCompare(a.asOf))[0];
+   return reply(res,200,{transactions:recent,summary:portfolioTotals(d.transactions),analytics:portfolioAnalytics(d.transactions,d.quotes),watchlist:d.watchlist||[],events,snapshots:last?[last]:[],encrypted:isEncrypted(),dataLocation:location(),settings:d.settings||{},latestOnly:true,warning:'A primeira tela transfere apenas os lançamentos recentes. As demais telas carregam dados completos sob demanda.'});
+  }
+  if(req.method==='POST'&&url.pathname==='/api/v28/statement/preview'){
+   const p=await body(req,2_200_000),preview=previewStatement28(p),reconciliation=reconcileStatement28(preview,await read(),{from:p.from||null,to:p.to||null});
+   return reply(res,200,{preview:{acceptedCount:preview.acceptedCount,rejectedCount:preview.rejectedCount,documentHash:preview.documentHash,rejected:preview.rejected.slice(0,20)},reconciliation});
+  }
+  if(req.method==='POST'&&url.pathname==='/api/v28/statement/confirm'){
+   const p=await body(req,2_200_000),preview=previewStatement28(p),reconciliation=reconcileStatement28(preview,await read(),{from:p.from||null,to:p.to||null}),review=validateStatementReview28({...p,reconciliation});
+   await changeStore28(db=>{db.statementReviewsV28||=[];if(db.statementReviewsV28.some(x=>x.documentHash===review.documentHash&&x.from===review.from&&x.to===review.to))throw Error('Revisão já registrada.');if(db.statementReviewsV28.length>=300)throw Error('Limite de documentos alcançado.');db.statementReviewsV28.push(review);});
+   return reply(res,201,{review,warning:'Conciliação matemática declarada pelo investidor; não autentica o arquivo bancário.'});
+  }
+  if(req.method==='POST'&&url.pathname==='/api/v28/valuation'){
+   const p=validatePortfolioValuation28(await body(req));
+   await changeStore28(db=>{db.portfolioValuationsV28||=[];if(db.portfolioValuationsV28.some(x=>x.date===p.date&&x.phase===p.phase))throw Error('Avaliação já cadastrada nessa data e fase.');if(db.portfolioValuationsV28.length>=15000)throw Error('Limite de avaliações atingido.');db.portfolioValuationsV28.push(p);});
+   return reply(res,201,{valuation:p});
+  }
+  if(req.method==='GET'&&url.pathname==='/api/v28/returns')return reply(res,200,performanceEvidence28(await read(),{start:url.searchParams.get('start'),end:url.searchParams.get('end')}));
+  if(req.method==='GET'&&url.pathname==='/api/state'){const db=await read();return reply(res,200,{transactions:db.transactions,instruments:db.instruments||[],fixedIncome:db.fixedIncome||[],foreignTrades:db.foreignTrades||[],foreignAudit:(db.foreignAudit||[]).slice(-15).map(({before,after,...rest})=>({...rest,ticker:(after||before)?.ticker})),foreignPositions:foreignPositions(db.foreignTrades),fxRates:db.fxRates||[],taxEvidence:db.taxEvidence||[],foreignMarketQuotes:db.foreignMarketQuotes||[],providerDividendFeed:(db.providerDividendFeed||[]).slice(-200),ipeIndex:(db.ipeIndex||[]).slice(0,150),cvmStatementsCount:(db.cvmStatements||[]).length,externalFlows:db.externalFlows||[],assetValuations:db.assetValuations||[],officialChecks:db.officialChecks||[],taxReviews:db.taxReviews||[],notices:db.notices||[],transactionAudit:(db.transactionAudit||[]).slice(-30).map(({before,after,...item})=>({...item,ticker:(after||before)?.ticker,type:(after||before)?.type})),watchlist:db.watchlist,messages:db.messages,quotes:db.quotes,profiles:db.profiles,events:db.events,snapshots:db.snapshots||[],documents:docsList(db),imports:db.imports,cvmReports:(db.cvmReports||[]).length,quoteHistoryStats:{observations:(db.quoteHistory||[]).length,firstDate:db.quoteHistory?.length?[...db.quoteHistory].sort((a,b)=>a.date.localeCompare(b.date))[0].date:null,lastDate:db.quoteHistory?.length?[...db.quoteHistory].sort((a,b)=>b.date.localeCompare(a.date))[0].date:null},benchmarkDays:(db.benchmarkCDI||[]).length,settings:db.settings,summary:portfolioTotals(db.transactions),analytics:portfolioAnalytics(db.transactions,db.quotes),dataLocation:location(),encrypted:isEncrypted()});}
   // Portfolio boundaries: each request is scoped through AsyncLocalStorage, never a process-wide mutable variable.
   // Multi-asset registry, fixed-income contracts, PTAX and tax evidence: no inferred market prices.
   // BYOK adapters never persist access keys; returns ONLY normalized financial observations.
@@ -185,7 +297,7 @@ async function handler(req,res){const url=new URL(req.url,ORIGIN);
   if(req.method==='POST'&&/^\/api\/extensions\/[a-z0-9.-]+\/permissions$/.test(url.pathname))return reply(res,200,{permission:await grantExtension(url.pathname.split('/')[3],await body(req))});
   if(req.method==='GET'&&/^\/api\/extensions\/[a-z0-9.-]+\/dashboard$/.test(url.pathname))return reply(res,200,await extensionDashboard(url.pathname.split('/')[3]));
   if(req.method==='DELETE'&&/^\/api\/extensions\/[a-z0-9.-]+$/.test(url.pathname))return reply(res,200,await uninstallExtension(url.pathname.split('/')[3]));
-  if(req.method==='GET'&&url.pathname==='/api/health')return reply(res,200,{ok:true,version:'1.4.0-rc.1',db:'sqlite',encrypted:isEncrypted()});
+  if(req.method==='GET'&&url.pathname==='/api/health')return reply(res,200,{ok:true,version:'2.8.0-preview.1',db:'sqlite',encrypted:isEncrypted()});
 
   if(req.method==='GET'&&url.pathname==='/api/performance'){
    const db=await read(),h=historyReport(db);
@@ -353,4 +465,4 @@ async function handler(req,res){const url=new URL(req.url,ORIGIN);
  const route=url.pathname==='/'?'/index.html':url.pathname;if(route.includes('..')||route.includes('\\')||route.includes('\0'))return reply(res,404,{error:'Arquivo não encontrado.'});const abs=path.resolve(WWW,'.'+route);if(!abs.startsWith(WWW+path.sep))return reply(res,404,{error:'Arquivo não encontrado.'});
  try{const stat=await fs.stat(abs);if(!stat.isFile())throw Error();const b=await fs.readFile(abs);res.writeHead(200,{'Content-Type':TYPES[path.extname(abs)]||'application/octet-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"});if(req.method==='HEAD')res.end();else res.end(b);}catch{return reply(res,404,{error:'Arquivo não encontrado.'});}
 }
-await init();http.createServer((req,res)=>{handler(req,res).catch(e=>{if(!res.headersSent)bad(res,e);})}).listen(PORT,HOST,()=>{console.log(`Metrics Investimentos 1.4.0-rc.1 | dados: ${location()} | criptografia: ${isEncrypted()?'ativada':'não ativada'}`);console.log(`METRICS_LAUNCH_URL=${ORIGIN}/?access=${ACCESS_TOKEN}`);});
+await init();http.createServer((req,res)=>{handler(req,res).catch(e=>{if(!res.headersSent)bad(res,e);})}).listen(PORT,HOST,()=>{console.log(`Metrics Investimentos 2.8.0-preview.1 | dados: ${location()} | criptografia: ${isEncrypted()?'ativada':'não ativada'}`);console.log(`METRICS_LAUNCH_URL=${ORIGIN}/?access=${ACCESS_TOKEN}`);});

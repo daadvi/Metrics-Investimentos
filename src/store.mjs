@@ -1,3 +1,6 @@
+import {createSnapshotCache} from './storage-read-cache.mjs';
+import {createNormalizedStorage27,NORMALIZED_MARKER_27} from './normalized-storage-v27.mjs';
+import {createHistorySQL28} from './history-sql-v28.mjs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,11 +18,13 @@ import {validateForeignTrade,foreignPositions} from './foreign-ledger.mjs';
 const DIR=process.env.METRICS_DATA_DIR||path.join(os.homedir(),'.metrics-investimentos');
 const DB=path.join(DIR,'metrics.sqlite');
 const LEGACY=path.join(DIR,'metrics.json');
+let metricsHistory28=null;
+let metricsNormalized27=null;
 let sql;
 const portfolioScope=new AsyncLocalStorage();
 export function withPortfolio(id,operation){if(id!==undefined&&id!==null&&!/^[a-f0-9-]{36}$/.test(String(id)))throw Error('Carteira solicitada inválida.');return portfolioScope.run(id||null,operation);}
 const ENCRYPT=String(process.env.METRICS_PASSPHRASE||'');
-const fresh=()=>({schema:6,instruments:[],fixedIncome:[],foreignTrades:[],foreignAudit:[],fxRates:[],taxEvidence:[],notices:[],transactions:[],transactionAudit:[],watchlist:[],messages:[],quotes:[],documents:[],imports:[],profiles:[],events:[],snapshots:[],quoteHistory:[],benchmarkCDI:[],cvmReports:[],cvmQuarterly:[],providerDividends:[],ipeIndex:[],cvmStatements:[],providerDividendFeed:[],foreignMarketQuotes:[],benchmarkIndex:{IBOVESPA:[],IFIX:[],IPCA:[]},providerResearch:[],settings:{theme:'dark'}});
+const fresh=()=>({schema:6,instruments:[],fixedIncome:[],foreignTrades:[],foreignAudit:[],fxRates:[],taxEvidence:[],notices:[],transactions:[],transactionAudit:[],watchlist:[],messages:[],quotes:[],documents:[],imports:[],profiles:[],events:[],snapshots:[],quoteHistory:[],benchmarkCDI:[],cvmReports:[],cvmQuarterly:[],providerDividends:[],ipeIndex:[],cvmStatements:[],providerDividendFeed:[],foreignMarketQuotes:[],externalFlows:[],assetValuations:[],officialChecks:[],taxReviews:[],benchmarkIndex:{IBOVESPA:[],IFIX:[],IPCA:[]},providerResearch:[],settings:{theme:'dark'}});
 export function location(){return DIR;}
 function key(salt){return scryptSync(ENCRYPT,salt,32);}
 function pack(db){const plaintext=JSON.stringify(db);
@@ -32,7 +37,7 @@ function unpack(s){const d=JSON.parse(s);if(!d.encrypted){if(ENCRYPT)throw new E
  if(!ENCRYPT)throw new Error('Este banco está criptografado. Defina METRICS_PASSPHRASE ao iniciar.');
  try{const decipher=createDecipheriv('aes-256-gcm',key(Buffer.from(d.salt,'base64')),Buffer.from(d.iv,'base64'));decipher.setAuthTag(Buffer.from(d.tag,'base64'));return normalizeRoot(JSON.parse(Buffer.concat([decipher.update(Buffer.from(d.data,'base64')),decipher.final()]).toString('utf8')));}catch{throw new Error('Senha de dados incorreta ou banco danificado.');}
 }
-function normalize(raw){const d=raw&&typeof raw==='object'?raw:fresh();for(const k of ['instruments','fixedIncome','foreignTrades','foreignAudit','fxRates','taxEvidence','notices','transactions','transactionAudit','watchlist','messages','quotes','documents','imports','profiles','events','snapshots','quoteHistory','benchmarkCDI','cvmReports','cvmQuarterly','providerDividends','ipeIndex','cvmStatements','providerDividendFeed','foreignMarketQuotes'])if(!Array.isArray(d[k]))d[k]=[];if(!d.settings||typeof d.settings!=='object')d.settings={};if(!d.benchmarkIndex||typeof d.benchmarkIndex!=='object')d.benchmarkIndex={IBOVESPA:[],IFIX:[],IPCA:[]};for(const k of ['IBOVESPA','IFIX','IPCA'])if(!Array.isArray(d.benchmarkIndex[k]))d.benchmarkIndex[k]=[];if(!Array.isArray(d.providerResearch))d.providerResearch=[];if(!d.extensionGrants||typeof d.extensionGrants!=='object'||Array.isArray(d.extensionGrants))d.extensionGrants={};d.schema=6;return d;}
+function normalize(raw){const d=raw&&typeof raw==='object'?raw:fresh();for(const k of ['instruments','fixedIncome','foreignTrades','foreignAudit','fxRates','taxEvidence','notices','transactions','transactionAudit','watchlist','messages','quotes','documents','imports','profiles','events','snapshots','quoteHistory','benchmarkCDI','cvmReports','cvmQuarterly','providerDividends','ipeIndex','cvmStatements','providerDividendFeed','foreignMarketQuotes','externalFlows','assetValuations','officialChecks','taxReviews'])if(!Array.isArray(d[k]))d[k]=[];if(!d.settings||typeof d.settings!=='object')d.settings={};if(!d.benchmarkIndex||typeof d.benchmarkIndex!=='object')d.benchmarkIndex={IBOVESPA:[],IFIX:[],IPCA:[]};for(const k of ['IBOVESPA','IFIX','IPCA'])if(!Array.isArray(d.benchmarkIndex[k]))d.benchmarkIndex[k]=[];if(!Array.isArray(d.providerResearch))d.providerResearch=[];if(!d.extensionGrants||typeof d.extensionGrants!=='object'||Array.isArray(d.extensionGrants))d.extensionGrants={};d.schema=6;return d;}
 function normalizeRoot(raw){
  if(raw&&[4,5,6].includes(raw.schema)&&Array.isArray(raw.portfolios)){
   const root=raw;root.schema=6; if(!root.portfolios.length)throw Error('Banco sem carteiras.');
@@ -43,11 +48,12 @@ function normalizeRoot(raw){
  const id=randomUUID();return {schema:6,activePortfolioId:id,portfolios:[{id,name:'Carteira principal',createdAt:new Date().toISOString(),data:normalize(raw)}],extensions:[]};
 }
 function selected(root){const id=portfolioScope.getStore()||root.activePortfolioId;const p=root.portfolios.find(x=>x.id===id);if(!p)throw Error('Carteira não encontrada ou removida.');return p;}
-function dbGet(){const row=sql.prepare('SELECT content FROM storage WHERE id=1').get();return unpack(row.content);}
-function dbPut(data){sql.prepare('UPDATE storage SET content=?,updated_at=? WHERE id=1').run(pack(data),new Date().toISOString());}
-export async function init(){await fs.mkdir(DIR,{recursive:true,mode:0o700});sql=new DatabaseSync(DB);sql.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; CREATE TABLE IF NOT EXISTS storage(id INTEGER PRIMARY KEY CHECK(id=1), content TEXT NOT NULL, updated_at TEXT NOT NULL)');const entry=sql.prepare('SELECT id FROM storage WHERE id=1').get();if(!entry){let db=normalizeRoot(fresh());try{db=normalizeRoot(JSON.parse(await fs.readFile(LEGACY,'utf8')));await fs.copyFile(LEGACY,LEGACY+'.backup-before-sqlite');}catch(e){if(e.code!=='ENOENT')throw e;}sql.prepare('INSERT INTO storage(id,content,updated_at) VALUES(1,?,?)').run(pack(db),new Date().toISOString());}else {
+const metricsSnapshotCache26=createSnapshotCache({enabled:process.env.METRICS_DISABLE_READ_CACHE!=='1',maxBytes:4*1024*1024});
+function dbGet(){const row=sql.prepare('SELECT content FROM storage WHERE id=1').get();return row.content===NORMALIZED_MARKER_27?normalizeRoot(metricsNormalized27.read()):(row.content.startsWith('{"encrypted":true')?metricsSnapshotCache26.get(row.content,unpack):unpack(row.content));}
+function dbPut(data){const current=sql.prepare('SELECT content FROM storage WHERE id=1').get();if(current?.content===NORMALIZED_MARKER_27){metricsNormalized27.write(data);metricsHistory28?.bump(selected(data).id);sql.prepare('UPDATE storage SET updated_at=? WHERE id=1').run(new Date().toISOString());return;}sql.prepare('UPDATE storage SET content=?,updated_at=? WHERE id=1').run(pack(data),new Date().toISOString());metricsHistory28?.bump(selected(data).id);}
+export async function init(){await fs.mkdir(DIR,{recursive:true,mode:0o700});sql=new DatabaseSync(DB);sql.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; CREATE TABLE IF NOT EXISTS storage(id INTEGER PRIMARY KEY CHECK(id=1), content TEXT NOT NULL, updated_at TEXT NOT NULL)');metricsNormalized27=createNormalizedStorage27(sql,{passphrase:ENCRYPT});metricsNormalized27.initialize();metricsHistory28=createHistorySQL28(sql,{normalized:metricsNormalized27,legacyRead:()=>selected(dbGet()).data,activePortfolio:()=>portfolioScope.getStore()||(metricsNormalized27.status().normalized?metricsNormalized27.rootMeta().activePortfolioId:dbGet().activePortfolioId)});const entry=sql.prepare('SELECT id FROM storage WHERE id=1').get();if(!entry){let db=normalizeRoot(fresh());try{db=normalizeRoot(JSON.parse(await fs.readFile(LEGACY,'utf8')));await fs.copyFile(LEGACY,LEGACY+'.backup-before-sqlite');}catch(e){if(e.code!=='ENOENT')throw e;}sql.prepare('INSERT INTO storage(id,content,updated_at) VALUES(1,?,?)').run(pack(db),new Date().toISOString());}else {
  const row=sql.prepare('SELECT content FROM storage WHERE id=1').get();const persisted=JSON.parse(row.content);
- if(ENCRYPT&&!persisted.encrypted){
+ if(ENCRYPT&&!persisted.encrypted&&!persisted.normalizedV27){
   // Explicit migration from v0.4 plaintext JSON to AES-GCM storage, in a SQL transaction.
   if(process.env.METRICS_MIGRATE_ENCRYPT!=='1')throw new Error('Dados antigos sem criptografia; ative migração autorizada ou faça backup.');
   const clean=normalizeRoot(persisted);sql.exec('BEGIN IMMEDIATE');
@@ -64,6 +70,28 @@ export async function init(){await fs.mkdir(DIR,{recursive:true,mode:0o700});sql
  }try{await fs.chmod(DB,0o600);}catch{}
   if(ENCRYPT){try{await createAutomaticLocalBackup();}catch(e){console.warn('Metrics: backup automático local indisponível:',e.message);}}
 }
+export function storageCacheStatus26(){return {...metricsSnapshotCache26.stats(),mode:'ENCRYPTED_ONLY'};}
+/** Irreversible-in-code migration is opt-in, but a verified SQLite backup allows restoration. */
+export function storageStatus27(){return metricsNormalized27.status();}
+export async function migrateStorage27(confirmation){
+ if(confirmation!=='NORMALIZAR')throw Error('Confirme digitando NORMALIZAR depois de testar backup independente.');
+ const job=tail.then(async()=>{
+  if(metricsNormalized27.status().normalized)return {alreadyNormalized:true,...metricsNormalized27.status()};
+  const recovery=path.join(DIR,'recovery-v27');await fs.mkdir(recovery,{recursive:true,mode:0o700});
+  const backupPath=path.join(recovery,'metrics-before-v27-'+new Date().toISOString().replace(/[:.]/g,'-')+'-'+randomUUID().slice(0,8)+'.sqlite');
+  await backupSQLite(sql,backupPath);try{await fs.chmod(backupPath,0o600);}catch{}
+  const before=dbGet();sql.exec('BEGIN IMMEDIATE');
+  try{
+   metricsNormalized27.write(before);
+   const reconstructed=metricsNormalized27.read();
+   if(JSON.stringify(before)!==JSON.stringify(reconstructed))throw Error('Divergência após migração; transação cancelada e backup preservado.');
+   sql.prepare('UPDATE storage SET content=?,updated_at=? WHERE id=1').run(NORMALIZED_MARKER_27,new Date().toISOString());
+   sql.exec('COMMIT');return {migrated:true,...metricsNormalized27.status(),backupPath};
+  }catch(e){sql.exec('ROLLBACK');throw e;}
+ });tail=job.catch(()=>{});return job;
+}
+/** Low-overhead history in SQL when the 2.7 normalized, unencrypted layout is enabled. */
+export function historyPage28(options={}){return metricsHistory28.page(options);}
 export async function read(){return selected(dbGet()).data;}
 export async function listPortfolios(){const root=dbGet();return {activePortfolioId:root.activePortfolioId,portfolios:root.portfolios.map(({id,name,createdAt})=>({id,name,createdAt}))};}
 function validatePortfolioName(name){if(typeof name!=='string'||!name.trim()||name.trim().length>50)throw Error('Use um nome com 1 a 50 caracteres.');return name.trim();}
@@ -71,7 +99,7 @@ async function changeRoot(fn){const task=tail.then(async()=>{sql.exec('BEGIN IMM
 export async function createPortfolio(name){return changeRoot(root=>{if(root.portfolios.length>=20)throw Error('Máximo de 20 carteiras neste dispositivo.');const portfolio={id:randomUUID(),name:validatePortfolioName(name),createdAt:new Date().toISOString(),data:normalize(fresh())};root.portfolios.push(portfolio);return {id:portfolio.id,name:portfolio.name,createdAt:portfolio.createdAt};});}
 export async function renamePortfolio(id,name){return changeRoot(root=>{const p=root.portfolios.find(x=>x.id===id);if(!p)throw Error('Carteira não encontrada.');p.name=validatePortfolioName(name);return {id:p.id,name:p.name};});}
 export async function selectPortfolio(id){return changeRoot(root=>{if(!root.portfolios.some(p=>p.id===id))throw Error('Carteira não encontrada.');root.activePortfolioId=id;return {activePortfolioId:id};});}
-export async function deleteEmptyPortfolio(id){return changeRoot(root=>{if(root.portfolios.length<=1)throw Error('A carteira principal não pode ser excluída.');const p=root.portfolios.find(x=>x.id===id);if(!p)throw Error('Carteira não encontrada.');const d=p.data;const collections=['instruments','fixedIncome','foreignTrades','foreignAudit','fxRates','taxEvidence','notices','transactions','transactionAudit','watchlist','documents','snapshots','events','imports','messages','quotes','profiles','quoteHistory','benchmarkCDI','providerResearch','cvmReports','cvmQuarterly','providerDividends','ipeIndex','cvmStatements','providerDividendFeed','foreignMarketQuotes'];const anyRecords=collections.some(k=>d[k]?.length)||Object.values(d.benchmarkIndex||{}).some(rows=>rows?.length)||Object.keys(d.extensionGrants||{}).length>0||Object.keys(d.settings||{}).some(k=>k!=='theme');if(anyRecords)throw Error('Somente carteiras sem registros, históricos, configurações ou permissões podem ser excluídas. Exporte backup antes de remover dados.');root.portfolios=root.portfolios.filter(x=>x.id!==id);if(root.activePortfolioId===id)root.activePortfolioId=root.portfolios[0].id;return {activePortfolioId:root.activePortfolioId};});}
+export async function deleteEmptyPortfolio(id){return changeRoot(root=>{if(root.portfolios.length<=1)throw Error('A carteira principal não pode ser excluída.');const p=root.portfolios.find(x=>x.id===id);if(!p)throw Error('Carteira não encontrada.');const d=p.data;const collections=['instruments','fixedIncome','foreignTrades','foreignAudit','fxRates','taxEvidence','notices','transactions','transactionAudit','watchlist','documents','snapshots','events','imports','messages','quotes','profiles','quoteHistory','benchmarkCDI','providerResearch','cvmReports','cvmQuarterly','providerDividends','ipeIndex','cvmStatements','providerDividendFeed','foreignMarketQuotes','externalFlows','assetValuations','officialChecks','taxReviews'];const anyRecords=collections.some(k=>d[k]?.length)||Object.values(d.benchmarkIndex||{}).some(rows=>rows?.length)||Object.keys(d.extensionGrants||{}).length>0||Object.keys(d.settings||{}).some(k=>k!=='theme');if(anyRecords)throw Error('Somente carteiras sem registros, históricos, configurações ou permissões podem ser excluídas. Exporte backup antes de remover dados.');root.portfolios=root.portfolios.filter(x=>x.id!==id);if(root.activePortfolioId===id)root.activePortfolioId=root.portfolios[0].id;return {activePortfolioId:root.activePortfolioId};});}
 
 let tail=Promise.resolve();
 export async function change(fn){const task=tail.then(async()=>{sql.exec('BEGIN IMMEDIATE');try{const root=dbGet();const result=await fn(selected(root).data);dbPut(root);sql.exec('COMMIT');return result;}catch(e){sql.exec('ROLLBACK');throw e;}});tail=task.catch(()=>{});return task;}

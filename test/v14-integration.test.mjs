@@ -1,3 +1,5 @@
+import {expectedMetricsVersion} from './helpers/expected-metrics-version.mjs';
+import {stopAndRemove} from './helpers/windows-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
@@ -21,7 +23,7 @@ test('v1.4: APIs, IPE, auditoria fiscal, Excel e isolamento entre carteiras',{ti
   assert.equal((await fetch(host+'/api/providers/catalog')).status,401);
   const login=await fetch(launch,{redirect:'manual'});const cookie=login.headers.get('set-cookie').split(';')[0];let portfolio=null;
   const api=async(endpoint,method='GET',data,expected=200)=>{const response=await fetch(host+endpoint,{method,headers:{cookie,'x-metrics-local':'1',...(portfolio?{'x-metrics-portfolio-id':portfolio}:{}),...(data?{'content-type':'application/json'}:{})},body:data?JSON.stringify(data):undefined});const text=await response.text();assert.equal(response.status,expected,text.slice(0,650));return JSON.parse(text);};
-  assert.equal((await api('/api/health')).version,'1.4.0-rc.1');
+  assert.equal((await api('/api/health')).version,expectedMetricsVersion);
   const catalog=await api('/api/providers/catalog');assert.equal(catalog.providers.length,7);assert.equal(catalog.providers.find(x=>x.id==='b3').quotes,false);
   const preview=await api('/api/official/ipe/preview','POST',{data:Buffer.from(ipe).toString('base64'),tickerMap:{'12345678000195':'PETR4'}});
   assert.equal(preview.entries.length,1);assert.equal(preview.entries[0].canConfirmDividend,false);
@@ -34,7 +36,7 @@ test('v1.4: APIs, IPE, auditoria fiscal, Excel e isolamento entre carteiras',{ti
   const other=await api('/api/portfolios','POST',{name:'Segunda carteira'},201);portfolio=other.portfolio.id;
   assert.equal((await api('/api/official/ipe')).total,0);assert.equal((await api('/api/providers/observations')).dividends.length,0);
   assert.equal((await api('/api/tax/evidence-v14?year=2026')).taxDue,null);
- }finally{child.kill('SIGTERM');await rm(dir,{recursive:true,force:true});}
+ }finally{await stopAndRemove(child,dir);}
 });
 test('XLSX agora aceita 12 abas, preservando cabeçalhos e procedência',()=>{
  const rows=Array.from({length:12},(_,i)=>({name:`Prova ${i+1}`,rows:[['Aba','Valor'],[i+1,'Não certificado']]}));

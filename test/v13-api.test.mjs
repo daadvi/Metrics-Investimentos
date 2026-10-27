@@ -1,3 +1,5 @@
+import {expectedMetricsVersion} from './helpers/expected-metrics-version.mjs';
+import {stopAndRemove} from './helpers/windows-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
@@ -12,7 +14,7 @@ test('API v1.3: fontes, apuração auxiliar, isolamento e persistência', {timeo
   const origin=`http://127.0.0.1:${port}`;assert.equal((await fetch(origin+'/api/data/health-v13')).status,401);
   const auth=await fetch(launch,{redirect:'manual'}),cookie=auth.headers.get('set-cookie').split(';')[0];let portfolio=null;
   const api=async(p,method='GET',data,expected=200)=>{const res=await fetch(origin+p,{method,headers:{cookie,'x-metrics-local':'1',...(portfolio?{'x-metrics-portfolio-id':portfolio}:{}),...(data?{'content-type':'application/json'}:{})},body:data?JSON.stringify(data):undefined});const text=await res.text();assert.equal(res.status,expected,text.slice(0,700));return JSON.parse(text);};
-  assert.equal((await api('/api/health')).version,'1.4.0-rc.1');
+  assert.equal((await api('/api/health')).version,expectedMetricsVersion);
   await api('/api/transactions','POST',{ticker:'GGRC11',date:'2026-01-01',type:'BUY',quantity:10,price:10},201);
   let csv='CNPJ_Fundo;Data_Referencia;Quantidade_Imoveis;Taxa_Vacancia\n12.345.678/0001-95;2026-06-30;12;2,5\n';
   const payload={tickerMap:{'12345678000195':'GGRC11'},data:Buffer.from(csv).toString('base64')};
@@ -27,5 +29,5 @@ test('API v1.3: fontes, apuração auxiliar, isolamento e persistência', {timeo
   const alt=await api('/api/portfolios','POST',{name:'Carteira alternativa'},201);portfolio=alt.portfolio.id;
   assert.equal((await api('/api/official/cvm-quarterly')).entries,0);assert.equal((await api('/api/official/provider-dividends')).observations.length,0);
   assert.equal((await api('/api/data/health-v13')).sourceRecords.cvmQuarterly,0);
- }finally{child.kill('SIGTERM');await rm(dir,{recursive:true,force:true});}
+ }finally{await stopAndRemove(child,dir);}
 });

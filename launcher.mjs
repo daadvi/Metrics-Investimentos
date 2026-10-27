@@ -1,10 +1,12 @@
 // Iniciador seguro para Linux, Windows e macOS. Não abre uma porta acessível na rede.
+import {randomInt} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const ROOT=path.dirname(fileURLToPath(import.meta.url));
-const child=spawn(process.execPath,['server.mjs'],{cwd:ROOT,env:process.env,stdio:['ignore','pipe','pipe']});
+const port=process.env.PORT||String(44000+randomInt(0,12000));
+const child=spawn(process.execPath,['server.mjs'],{cwd:ROOT,env:{...process.env,PORT:port},stdio:['ignore','pipe','pipe']});
 let opened=false,buffer='';
 function open(url){if(opened)return;opened=true;const linuxNames=['chromium','chromium-browser','google-chrome','google-chrome-stable','microsoft-edge'];
  if(os.platform()==='win32'){const p=spawn('cmd',['/c','start','',url],{stdio:'ignore',windowsHide:true});p.unref();}

@@ -1,3 +1,4 @@
+import {stopAndRemove} from './helpers/windows-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
@@ -26,5 +27,5 @@ test('fluxo real API: bloqueio, carteira, desejos, simulação, Excel e backup p
   const backup=await go('/api/backup/encrypted','POST',{password:'um-backup-seguro-de-verdade'});assert(!JSON.stringify(backup).includes('MXRF11'));
   await go('/api/backup/restore-encrypted','POST',{backup,password:'um-backup-seguro-de-verdade'});
   s=await go('/api/state');assert.equal(s.transactions.length,3);assert.equal(s.watchlist.length,1);
- }finally{server.kill('SIGTERM');await rm(dir,{recursive:true,force:true});}
+ }finally{await stopAndRemove(server,dir);}
 });
