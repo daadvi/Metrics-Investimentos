@@ -435,6 +435,114 @@ function bindEvidence28(){
  $('#returns-form28').onsubmit=async e=>{e.preventDefault();const o=$('#returns-output28');o.textContent='Conferindo extratos e avaliações...';try{const params=new URLSearchParams(new FormData(e.currentTarget));const r=await api('/api/v28/returns?'+params);o.innerHTML=r.status==='RECONCILED_BY_USER'?`<div class="metrics">${card('TWR por subperíodos',fmt(r.twrPercent,3)+'%','Vínculos de avaliações declaradas')}${card('XIRR anual',r.xirrPercent===null?'Indisponível':fmt(r.xirrPercent,3)+'%','Fluxos externos e saldo final')}</div><p class="small muted">${esc(r.warning)}</p>`:`<b>Sem retorno calculável</b>${r.blockers.map(x=>`<p class="small">⚠ ${esc(x)}</p>`).join('')}`;}catch(err){o.textContent=err.message;}};
 }
 
+/* FIX_WATCH_ANALYSIS_V28: edicao completa de desejos e fichas de acoes, local-first. */
+function metricsSetProfileFields28(form, profile) {
+  const keys=['ticker','type','name','sector','manager','equity','assets','occupied','vacancy','dividend','dy12','debt','date','source','notes'];
+  for (const key of keys) {
+    const field=form.elements.namedItem(key);
+    if(field && 'value' in field)field.value=profile?.[key]??'';
+  }
+}
+function metricsOpenProfile28(ticker, forceStock=false) {
+  S.page='assets';render();
+  const form=$('#profile-form');if(!form)return;
+  const existing=(S.profiles||[]).find(x=>x.ticker===ticker);
+  metricsSetProfileFields28(form,existing||{ticker,type:forceStock?'ACAO':'OUTRO'});
+  if(!existing && forceStock)form.elements.namedItem('type').value='ACAO';
+  const info=$('#profile-feedback-v28');
+  if(info)info.textContent=existing?'Ficha encontrada. Edite os campos e salve.':'Preencha somente os indicadores que conhece. O cadastro não cria uma compra.';
+  form.scrollIntoView({behavior:'smooth',block:'start'});
+  form.elements.namedItem('ticker')?.focus({preventScroll:true});
+}
+function metricsBindWatch28(){
+  if(S.page!=='watch')return;
+  const content=$('#content');if(!content)return;
+  const container=document.createElement('section');container.id='watch-edit-v28';container.className='card spaced';container.hidden=true;
+  container.setAttribute('aria-label','Editar ativo desejado');
+  content.insertBefore(container,content.firstChild?.nextSibling||null);
+  for(const edit of $('[data-edit-watch]')){
+    const id=edit.dataset.editWatch;
+    edit.textContent='Editar completo';
+    edit.onclick=()=>{
+      const item=(S.watchlist||[]).find(x=>x.id===id);
+      if(!item){toast('Ativo não encontrado. Recarregue a carteira.',true);return;}
+      container.hidden=false;
+      container.innerHTML=`<div class="card-header"><h2>Editar ${esc(item.ticker)}</h2><button class="btn smol" id="watch-cancel-v28" type="button">Cancelar</button></div>
+        <p class="small muted">Altere ticker, prioridade, preço-alvo e aporte. Isso não registra uma compra.</p>
+        <p id="watch-edit-feedback-v28" role="status" class="small"></p>
+        <form id="watch-edit-form-v28"><div class="form-grid two">
+          <label class="field">Ticker<input class="input" name="ticker" maxlength="24" required value="${esc(item.ticker)}"></label>
+          <label class="field">Prioridade<select class="input" name="priority">${[['alta','Alta'],['media','Média'],['baixa','Baixa']].map(([v,label])=>`<option value="${v}" ${item.priority===v?'selected':''}>${label}</option>`).join('')}</select></label>
+          <label class="field">Preço de interesse (R$)<input class="input" name="target" type="number" min="0.01" step="any" value="${esc(item.target??'')}"></label>
+          <label class="field">Aporte planejado (R$)<input class="input" name="budget" type="number" min="0.01" step="any" value="${esc(item.budget??'')}"></label>
+          <label class="field wide">Motivo / objetivo<textarea class="input" name="notes" maxlength="500" rows="3">${esc(item.notes||'')}</textarea></label>
+        </div><div class="form-actions"><button class="btn primary" type="submit">Salvar alterações</button></div></form>`;
+      $('#watch-cancel-v28').onclick=()=>{container.hidden=true;container.innerHTML='';};
+      const form=$('#watch-edit-form-v28');
+      form.onsubmit=async event=>{
+        event.preventDefault();const feedback=$('#watch-edit-feedback-v28'),button=form.querySelector('[type=submit]');
+        button.disabled=true;feedback.textContent='Salvando alterações...';
+        const data=formValue(form);data.ticker=String(data.ticker||'').trim().toUpperCase();
+        try{
+          await api('/api/watchlist/'+encodeURIComponent(id),{method:'PUT',data});
+          try{await update();render();toast('Ativo desejado atualizado.');}
+          catch(err){feedback.textContent='Alteração salva. Não foi possível atualizar a tela: '+err.message;button.disabled=false;}
+        }catch(err){feedback.textContent='Não foi possível salvar: '+err.message;button.disabled=false;}
+      };
+      container.scrollIntoView({behavior:'smooth',block:'start'});
+      form.elements.namedItem('ticker')?.focus({preventScroll:true});
+    };
+    const parent=edit.parentElement;
+    if(parent){
+      const go=document.createElement('button');go.type='button';go.className='btn smol';go.textContent='Analisar';
+      go.setAttribute('aria-label','Cadastrar ou abrir ficha de análise de '+id);
+      go.onclick=()=>{const w=(S.watchlist||[]).find(x=>x.id===id);if(w)metricsOpenProfile28(w.ticker,false);};
+      parent.insertBefore(go,edit);
+    }
+  }
+}
+function metricsBindAssets28(){
+  if(S.page!=='assets')return;
+  const form=$('#profile-form');if(!form)return;
+  let feedback=document.querySelector('#profile-feedback-v28');
+  if(!feedback){feedback=document.createElement('p');feedback.id='profile-feedback-v28';feedback.className='small muted';feedback.setAttribute('role','status');form.parentElement.insertBefore(feedback,form);}
+  const newStock=document.createElement('button');newStock.type='button';newStock.id='profile-new-stock-v28';newStock.className='btn';newStock.textContent='+ Cadastrar ação';
+  newStock.onclick=()=>{
+    form.reset();metricsSetProfileFields28(form,{type:'ACAO'});
+    feedback.textContent='Ação selecionada. Informe o ticker e salve; não é necessário preencher todos os indicadores.';
+    form.scrollIntoView({behavior:'smooth',block:'start'});form.elements.namedItem('ticker')?.focus({preventScroll:true});
+  };
+  form.parentElement.insertBefore(newStock,feedback);
+  const type=form.elements.namedItem('type');
+  if(type){type.addEventListener('change',()=>{feedback.textContent=type.value==='ACAO'?'Ação selecionada: dados financeiros opcionais e documentados.':'Cadastre dados de acordo com a classe selecionada.';});}
+  for(const remove of $('[data-remove-profile]')){
+    const t=remove.dataset.removeProfile,profile=(S.profiles||[]).find(x=>x.ticker===t);
+    const button=document.createElement('button');button.type='button';button.className='btn smol';button.textContent='Editar ficha';
+    button.onclick=()=>{if(!profile)return;metricsSetProfileFields28(form,profile);feedback.textContent='Editando '+profile.ticker+'. Salvar substitui a ficha deste ticker, sem criar duplicata.';form.scrollIntoView({behavior:'smooth',block:'start'});};
+    remove.parentElement?.insertBefore(button,remove);
+  }
+  // Sobrescreve o envio antigo para manter feedback mesmo se a atualizacao posterior falhar.
+  form.onsubmit=async e=>{
+    e.preventDefault();const data=formValue(form);data.ticker=String(data.ticker||'').trim().toUpperCase();
+    const submit=form.querySelector('[type="submit"],button:not([type])');if(submit)submit.disabled=true;
+    feedback.textContent='Salvando a ficha de '+data.ticker+'...';
+    try{
+      const result=await api('/api/profiles',{method:'POST',data});
+      try{await update();render();toast('Ficha '+result.profile.ticker+' salva na análise.');}
+      catch(err){feedback.textContent='Ficha salva no banco. Atualização da tela falhou: '+err.message;if(submit)submit.disabled=false;}
+    }catch(err){feedback.textContent='Falha ao salvar: '+err.message;if(submit)submit.disabled=false;}
+  };
+}
+function metricsBindExplore28(){
+  if(S.page!=='explore26')return;
+  const content=$('#content');if(!content)return;
+  const button=document.createElement('button');button.type='button';button.className='btn primary';
+  button.textContent='+ Cadastrar ação para análise';button.onclick=()=>metricsOpenProfile28('',true);
+  const heading=content.querySelector('.page-head');if(heading)heading.appendChild(button);else content.prepend(button);
+}
+const metricsRenderBeforeWatchFix28=render;
+render=function(){metricsRenderBeforeWatchFix28();metricsBindWatch28();metricsBindAssets28();metricsBindExplore28();};
+
 startup().catch(e=>{document.body.innerHTML='<main style="padding:35px;font-family:system-ui"><h1>Falha ao iniciar Metrics</h1><pre></pre></main>';$('pre').textContent=e.message;});
 
 // A user-controlled refresh while the desktop application is open; never a trading-grade feed.
