@@ -14,6 +14,7 @@ const metricsPager27=createHistoryPager27();
 import {previewStatement28,reconcileStatement28,validateStatementReview28} from './src/statement-reconciliation-v28.mjs';
 import {performanceEvidence28,validatePortfolioValuation28} from './src/return-evidence-v28.mjs';
 import {historyPage28,change as changeStore28} from './src/store.mjs';
+import {PROVIDER_TYPES,providerOf,validateConnection,newConnection,createApiVault,fetchProviderCatalog,searchCatalog,trackedTickers} from './src/api-center-v29.mjs';
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -40,6 +41,7 @@ import {sourceHealth} from './src/data-health-v13.mjs';
 import {providerCatalog,queryProvider} from './src/provider-hub.mjs';
 import {parseIpeIndex,downloadIpeIndex,ipeSummary} from './src/cvm-ipe.mjs';
 import {parseCvmDfp,dfpOverview} from './src/cvm-dfp.mjs';
+import {change as apiCenterChangeV29} from './src/store.mjs';
 import {storeProviderQuotes,saveProviderDividendObservations,saveIpeIndex,saveCvmStatements} from './src/store.mjs';
 import {fiscalEvidenceAudit,aiInstructionsV14} from './src/fiscal-evidence-v14.mjs';
 import {reconcileIncome,dataCoverage} from './src/dividend-reconciliation.mjs';
@@ -52,6 +54,7 @@ import {fetchBCBCDI,fetchBCBIPCA} from './src/benchmark.mjs';
 import {portfolioXirr,auditPortfolio} from './src/analytics-v1.mjs';
 import {fetchBrapiDataset,normalizeProviderData} from './src/market-intelligence.mjs';
 import {localAlerts,screener,incomeGoal} from './src/radar-v1.mjs';
+const metricsVault29=createApiVault({dir:process.env.METRICS_DATA_DIR||path.join((await import('node:os')).default.homedir(),'.metrics-investimentos')});
 const HOME=path.dirname(fileURLToPath(import.meta.url)),WWW=path.join(HOME,'web');
 const PORT=Number(process.env.PORT||4173),HOST='127.0.0.1',ORIGIN=`http://${HOST}:${PORT}`;
 const ACCESS_TOKEN=randomBytes(32).toString('hex');
@@ -131,7 +134,7 @@ async function handler(req,res){const url=new URL(req.url,ORIGIN);
   if(req.method==='GET'&&url.pathname==='/api/v26/system'){
    const nodeVersion=process.versions.node,parts=nodeVersion.split('.').map(Number);
    const nodeCompatible=parts[0]>22||(parts[0]===22&&parts[1]>=13);
-   return reply(res,200,{version:'2.8.0-preview.1',platform:process.platform,nodeVersion,nodeCompatible,storageCache:storageCacheStatus26(),desktopRuntime:process.env.ELECTRON_RUN_AS_NODE==='1',warning:'A verificação não confirma backups, compilação Windows, extratos ou certificados fiscais. As etapas do guia exigem confirmação manual.'});
+   return reply(res,200,{version:'2.9.0-preview.1',platform:process.platform,nodeVersion,nodeCompatible,storageCache:storageCacheStatus26(),desktopRuntime:process.env.ELECTRON_RUN_AS_NODE==='1',warning:'A verificação não confirma backups, compilação Windows, extratos ou certificados fiscais. As etapas do guia exigem confirmação manual.'});
   }
   // Metrics v2.7: controlled pagination and read-only import reconciliation.
   if(req.method==='GET'&&url.pathname==='/api/v27/history')return reply(res,200,metricsPager27.page(await read(),{kind:url.searchParams.get('kind')||'transactions',limit:Number(url.searchParams.get('limit')||40),cursor:url.searchParams.get('cursor')||null,portfolioId:String(req.headers['x-metrics-portfolio-id']||'active'),from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||'',ticker:url.searchParams.get('ticker')||''}));
@@ -166,6 +169,90 @@ async function handler(req,res){const url=new URL(req.url,ORIGIN);
    return reply(res,201,{valuation:p});
   }
   if(req.method==='GET'&&url.pathname==='/api/v28/returns')return reply(res,200,performanceEvidence28(await read(),{start:url.searchParams.get('start'),end:url.searchParams.get('end')}));
+  // Metrics 2.9 - connections: no API credentials are returned in JSON, state or backups.
+  if(url.pathname.startsWith('/api/v29/')){
+    const pid=req.headers['x-metrics-portfolio-id']||(await listPortfolios()).activePortfolioId;
+    const current=await read(); // validates the request's portfolio scope.
+    const connections=current.apiConnectionsV29||[];
+    const vault=metricsVault29;
+    const idRoute=/^\/api\/v29\/connections\/([a-f0-9-]{36})(?:\/(refresh|sync))?$/.exec(url.pathname);
+    const found=idRoute?connections.find(c=>c.id===idRoute[1]):null;
+    if(req.method==='GET'&&url.pathname==='/api/v29/connections'){
+      const items=await Promise.all(connections.map(async c=>({...c,...await vault.status(pid,c.id),capabilities:providerOf(c.provider)})));
+      return reply(res,200,{connections:items,persistentCredentials:vault.persistent,warning:vault.persistent?'Credenciais no cofre local criptografado, separadas do backup JSON.':'Sem chave de proteção do banco: credenciais duram somente enquanto este aplicativo estiver aberto. Não são gravadas em texto puro.'});
+    }
+    if(req.method==='POST'&&url.pathname==='/api/v29/connections'){
+      const raw=await body(req,4096),valid=validateConnection(raw);
+      if(connections.length>=10)throw Error('Máximo de dez conexões por carteira.');
+      const entry=newConnection(valid);
+      await apiCenterChangeV29(db=>{db.apiConnectionsV29||=[];db.apiConnectionsV29.push(entry);});
+      if(valid.key)await vault.set(pid,entry.id,valid.key);
+      let catalogCount=null,catalogMessage='Este provedor não oferece catálogo geral validado; use sincronização dos ativos acompanhados.';
+      if(providerOf(valid.provider).catalog){
+       try{const catalog=await fetchProviderCatalog(valid.provider,valid.key);
+        await apiCenterChangeV29(db=>{
+         db.apiCatalogV29||=[];db.apiCatalogV29.push({connectionId:entry.id,provider:entry.provider,items:catalog.items,fetchedAt:catalog.fetchedAt,source:catalog.source,truncated:catalog.truncated});
+         const c=db.apiConnectionsV29?.find(x=>x.id===entry.id);if(c){c.lastCatalogAt=catalog.fetchedAt;c.status='CATALOGO_CONSULTADO';}
+        });
+        catalogCount=catalog.items.length;catalogMessage=`Catálogo importado automaticamente: ${catalogCount} símbolos. ${catalog.warning}`;
+       }catch(e){catalogMessage='Conexão cadastrada, mas o catálogo não foi importado: '+String(e.message||e).slice(0,150);}
+      }
+      return reply(res,201,{connection:entry,persistentCredentials:vault.persistent,catalogCount,warning:catalogMessage});
+    }
+    if(req.method==='GET'&&url.pathname==='/api/v29/catalog'){
+      const id=url.searchParams.get('connectionId')||'';
+      if(!connections.some(c=>c.id===id))throw Error('Conexão inexistente nesta carteira.');
+      return reply(res,200,searchCatalog(current,id,{q:url.searchParams.get('q')||'',page:url.searchParams.get('page')||1,limit:url.searchParams.get('limit')||50}));
+    }
+    if(req.method==='GET'&&url.pathname==='/api/v29/asset'){
+      const cid=url.searchParams.get('connectionId')||'',ticker=String(url.searchParams.get('ticker')||'').toUpperCase();
+      const c=connections.find(x=>x.id===cid);if(!c)throw Error('Conexão não encontrada.');
+      const catalog=current.apiCatalogV29?.find(x=>x.connectionId===cid);
+      if(!catalog?.items?.some(x=>x.symbol===ticker))throw Error('Ativo não consta no catálogo da conexão.');
+      const key=await vault.get(pid,c.id);if(!key)throw Error('Informe uma chave para consultar dados além do catálogo público.');
+      const result=await queryProvider({provider:c.provider,ticker,key,kind:'quote'});
+      return reply(res,200,{ticker,quotes:result.quotes||[],warning:result.warning||'Dados do provedor: veja data e licença.'});
+    }
+    if(idRoute&&!found)throw Error('Conexão não encontrada nesta carteira.');
+    if(idRoute&&req.method==='PUT'&&!idRoute[2]){
+      const raw=await body(req,4096),label=String(raw.label??found.label).trim();
+      if(!label||label.length>70)throw Error('Nome da conexão inválido.');
+      if(raw.key!==undefined){const validated=validateConnection({provider:found.provider,label,key:raw.key});if(!validated.key)throw Error('Não substitua a chave por um valor vazio. Remova a conexão para revogar o acesso.');await vault.set(pid,found.id,validated.key);}
+      await apiCenterChangeV29(db=>{const item=db.apiConnectionsV29?.find(x=>x.id===found.id);if(!item)throw Error('Conexão removida.');item.label=label;item.status='REGISTRADA_NAO_TESTADA';});
+      return reply(res,200,{updated:true});
+    }
+    if(idRoute&&req.method==='DELETE'&&!idRoute[2]){
+      await apiCenterChangeV29(db=>{db.apiConnectionsV29=(db.apiConnectionsV29||[]).filter(x=>x.id!==found.id);db.apiCatalogV29=(db.apiCatalogV29||[]).filter(x=>x.connectionId!==found.id);});
+      await vault.remove(pid,found.id);
+      return reply(res,200,{removed:true});
+    }
+    if(idRoute&&req.method==='POST'&&idRoute[2]==='refresh'){
+      const key=await vault.get(pid,found.id),catalog=await fetchProviderCatalog(found.provider,key||'');
+      await apiCenterChangeV29(db=>{
+       db.apiCatalogV29||=[];db.apiCatalogV29=db.apiCatalogV29.filter(x=>x.connectionId!==found.id);
+       db.apiCatalogV29.push({connectionId:found.id,provider:found.provider,items:catalog.items,fetchedAt:catalog.fetchedAt,source:catalog.source,truncated:catalog.truncated});
+       const c=db.apiConnectionsV29?.find(x=>x.id===found.id);if(c){c.lastCatalogAt=catalog.fetchedAt;c.status='CATALOGO_CONSULTADO';}
+      });
+      return reply(res,200,{count:catalog.items.length,truncated:catalog.truncated,fetchedAt:catalog.fetchedAt,source:catalog.source,warning:catalog.warning});
+    }
+    if(idRoute&&req.method==='POST'&&idRoute[2]==='sync'){
+      const key=await vault.get(pid,found.id);if(!key)throw Error('Cadastre uma chave válida para consultar cotações.');
+      const data=await body(req,1024),batch=trackedTickers(current,found.provider,{offset:data.offset||0,limit:Math.min(8,Number(data.limit)||8)});
+      const outcomes=[];let updated=0;
+      for(const ticker of batch.tickers){
+       try{const r=await queryProvider({provider:found.provider,ticker,key,kind:'quote'});
+        if(!Array.isArray(r.quotes)||!r.quotes.length)throw Error('Sem cotação reconhecida.');
+        const saved=await storeProviderQuotes(r.quotes);updated+=(saved.brazilian||0)+(saved.foreign||0);
+        outcomes.push({ticker,status:'CONSULTADO',quotes:r.quotes.length});
+       }catch(e){outcomes.push({ticker,status:'FALHA',reason:String(e.message||e).slice(0,130)});if(/Limite de requisições/.test(String(e.message||e)))break;}
+      }
+      await apiCenterChangeV29(db=>{const c=db.apiConnectionsV29?.find(x=>x.id===found.id);if(c)c.lastSyncAt=new Date().toISOString();});
+      const start=Math.max(0,Math.floor(Number(data.offset)||0));const next=start+outcomes.length<batch.total?start+outcomes.length:null;
+      return reply(res,200,{updated,results:outcomes,nextOffset:next,totalTracked:batch.total,warning:'Apenas ativos já acompanhados; sem transações inventadas, sem cotação em tempo real garantida. Verifique a data de cada preço.'});
+    }
+    return reply(res,404,{error:'Recurso da Central de APIs não encontrado.'});
+  }
+
   if(req.method==='GET'&&url.pathname==='/api/state'){const db=await read();return reply(res,200,{transactions:db.transactions,instruments:db.instruments||[],fixedIncome:db.fixedIncome||[],foreignTrades:db.foreignTrades||[],foreignAudit:(db.foreignAudit||[]).slice(-15).map(({before,after,...rest})=>({...rest,ticker:(after||before)?.ticker})),foreignPositions:foreignPositions(db.foreignTrades),fxRates:db.fxRates||[],taxEvidence:db.taxEvidence||[],foreignMarketQuotes:db.foreignMarketQuotes||[],providerDividendFeed:(db.providerDividendFeed||[]).slice(-200),ipeIndex:(db.ipeIndex||[]).slice(0,150),cvmStatementsCount:(db.cvmStatements||[]).length,externalFlows:db.externalFlows||[],assetValuations:db.assetValuations||[],officialChecks:db.officialChecks||[],taxReviews:db.taxReviews||[],notices:db.notices||[],transactionAudit:(db.transactionAudit||[]).slice(-30).map(({before,after,...item})=>({...item,ticker:(after||before)?.ticker,type:(after||before)?.type})),watchlist:db.watchlist,messages:db.messages,quotes:db.quotes,profiles:db.profiles,events:db.events,snapshots:db.snapshots||[],documents:docsList(db),imports:db.imports,cvmReports:(db.cvmReports||[]).length,quoteHistoryStats:{observations:(db.quoteHistory||[]).length,firstDate:db.quoteHistory?.length?[...db.quoteHistory].sort((a,b)=>a.date.localeCompare(b.date))[0].date:null,lastDate:db.quoteHistory?.length?[...db.quoteHistory].sort((a,b)=>b.date.localeCompare(a.date))[0].date:null},benchmarkDays:(db.benchmarkCDI||[]).length,settings:db.settings,summary:portfolioTotals(db.transactions),analytics:portfolioAnalytics(db.transactions,db.quotes),dataLocation:location(),encrypted:isEncrypted()});}
   // Portfolio boundaries: each request is scoped through AsyncLocalStorage, never a process-wide mutable variable.
   // Multi-asset registry, fixed-income contracts, PTAX and tax evidence: no inferred market prices.
@@ -173,11 +260,11 @@ async function handler(req,res){const url=new URL(req.url,ORIGIN);
   if(req.method==='GET'&&url.pathname==='/api/providers/catalog')return reply(res,200,{providers:providerCatalog(),keyPolicy:'Chaves usadas apenas na consulta, não gravadas no SQLite ou enviadas para outros provedores.'});
   if(req.method==='GET'&&url.pathname==='/api/providers/observations'){const d=await read();return reply(res,200,{foreignPrices:d.foreignMarketQuotes||[],dividends:d.providerDividendFeed||[],ipeCount:(d.ipeIndex||[]).length});}
   if(req.method==='POST'&&url.pathname==='/api/providers/quotes/update'){
-   const p=await body(req),r=await queryProvider({provider:p.provider,ticker:p.ticker,key:p.key,kind:'quote'});
+   const p=await body(req),candidate=(await read()).apiConnectionsV29?.find(c=>c.provider===p.provider),pid=req.headers['x-metrics-portfolio-id']||(await listPortfolios()).activePortfolioId,key=p.key||(candidate?await metricsVault29.get(pid,candidate.id):null),r=await queryProvider({provider:p.provider,ticker:p.ticker,key,kind:'quote'});
    const saved=await storeProviderQuotes(r.quotes);return reply(res,200,{...saved,quotes:r.quotes,warning:r.warning,provider:r.provider});
   }
   if(req.method==='POST'&&url.pathname==='/api/providers/dividends/update'){
-   const p=await body(req),r=await queryProvider({provider:p.provider,ticker:p.ticker,key:p.key,kind:'dividends',cvmCode:p.cvmCode});
+   const p=await body(req),candidate=(await read()).apiConnectionsV29?.find(c=>c.provider===p.provider),pid=req.headers['x-metrics-portfolio-id']||(await listPortfolios()).activePortfolioId,key=p.key||(candidate?await metricsVault29.get(pid,candidate.id):null),r=await queryProvider({provider:p.provider,ticker:p.ticker,key,kind:'dividends',cvmCode:p.cvmCode});
    const saved=await saveProviderDividendObservations(r.observations);
    return reply(res,200,{...saved,observations:r.observations.slice(0,100),warning:r.warning,provider:r.provider});
   }
@@ -297,7 +384,7 @@ async function handler(req,res){const url=new URL(req.url,ORIGIN);
   if(req.method==='POST'&&/^\/api\/extensions\/[a-z0-9.-]+\/permissions$/.test(url.pathname))return reply(res,200,{permission:await grantExtension(url.pathname.split('/')[3],await body(req))});
   if(req.method==='GET'&&/^\/api\/extensions\/[a-z0-9.-]+\/dashboard$/.test(url.pathname))return reply(res,200,await extensionDashboard(url.pathname.split('/')[3]));
   if(req.method==='DELETE'&&/^\/api\/extensions\/[a-z0-9.-]+$/.test(url.pathname))return reply(res,200,await uninstallExtension(url.pathname.split('/')[3]));
-  if(req.method==='GET'&&url.pathname==='/api/health')return reply(res,200,{ok:true,version:'2.8.0-preview.1',db:'sqlite',encrypted:isEncrypted()});
+  if(req.method==='GET'&&url.pathname==='/api/health')return reply(res,200,{ok:true,version:'2.9.0-preview.1',db:'sqlite',encrypted:isEncrypted()});
 
   if(req.method==='GET'&&url.pathname==='/api/performance'){
    const db=await read(),h=historyReport(db);
@@ -465,4 +552,4 @@ async function handler(req,res){const url=new URL(req.url,ORIGIN);
  const route=url.pathname==='/'?'/index.html':url.pathname;if(route.includes('..')||route.includes('\\')||route.includes('\0'))return reply(res,404,{error:'Arquivo não encontrado.'});const abs=path.resolve(WWW,'.'+route);if(!abs.startsWith(WWW+path.sep))return reply(res,404,{error:'Arquivo não encontrado.'});
  try{const stat=await fs.stat(abs);if(!stat.isFile())throw Error();const b=await fs.readFile(abs);res.writeHead(200,{'Content-Type':TYPES[path.extname(abs)]||'application/octet-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"});if(req.method==='HEAD')res.end();else res.end(b);}catch{return reply(res,404,{error:'Arquivo não encontrado.'});}
 }
-await init();http.createServer((req,res)=>{handler(req,res).catch(e=>{if(!res.headersSent)bad(res,e);})}).listen(PORT,HOST,()=>{console.log(`Metrics Investimentos 2.8.0-preview.1 | dados: ${location()} | criptografia: ${isEncrypted()?'ativada':'não ativada'}`);console.log(`METRICS_LAUNCH_URL=${ORIGIN}/?access=${ACCESS_TOKEN}`);});
+await init();http.createServer((req,res)=>{handler(req,res).catch(e=>{if(!res.headersSent)bad(res,e);})}).listen(PORT,HOST,()=>{console.log(`Metrics Investimentos 2.9.0-preview.1 | dados: ${location()} | criptografia: ${isEncrypted()?'ativada':'não ativada'}`);console.log(`METRICS_LAUNCH_URL=${ORIGIN}/?access=${ACCESS_TOKEN}`);});

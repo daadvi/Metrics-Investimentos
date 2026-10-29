@@ -60,3 +60,7 @@ O Metrics compara com os aportes e retiradas já cadastrados na carteira. Datas 
 - Análise TWR/XIRR deve ser confrontada com contas independentes e documentos reais antes de uso financeiro. Não gera DARF nem aconselhamento de investimento.
 
 Veja `docs/AUDITORIA_V28.md` para a lista de riscos e a matriz de testes.
+
+
+## Metrics 2.9: Central de APIs
+Veja docs/API_CENTER_V29.md. Chaves nunca vão para a API de exportação de carteiras.

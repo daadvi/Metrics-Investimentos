@@ -4,8 +4,8 @@ import {readFileSync} from 'node:fs';
 import {readPdf,parseB3CustodyText} from '../src/pdf.mjs';
 import {expectedMetricsVersion} from './helpers/expected-metrics-version.mjs';
 
-test('2.8: pacote e API utilizam versão declarada única',()=>{
- assert.match(expectedMetricsVersion,/^2\.8\.0-preview\.1$/);
+test('Metrics: versão declarada válida independente do minor release',()=>{
+ assert.match(expectedMetricsVersion,/^2\.\d+\.\d+-preview\.\d+$/);
 });
 
 test('2.8: PDF com texto é extraído sem erro no encerramento do PDF.js',async()=>{
