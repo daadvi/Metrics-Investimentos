@@ -1,14 +1,17 @@
 {
   "name": "metrics-investimentos",
-  "version": "2.9.0-preview.1",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
-  "description": "Metrics 2.9 Preview: Central de APIs com cofre criptografado, catálogo e sincronização sob demanda",
+  "description": "Metrics Investimentos 3.0.0: integridade de dados, navegação persistente, análise e testes de release",
   "scripts": {
     "start": "node launcher.mjs",
-    "test": "node --test --test-concurrency=1 test/ai.test.mjs test/api-e2e.test.mjs test/domain.test.mjs test/extended.test.mjs test/store.test.mjs test/v03.test.mjs test/v04-api.test.mjs test/v04-export.test.mjs test/v04-market-tax.test.mjs test/v05-integrity.test.mjs test/v05-security.test.mjs test/v06-api.test.mjs test/v06-market-history.test.mjs test/v1-api.test.mjs test/v1-community.test.mjs test/v1-core.test.mjs test/v1-document-backup.test.mjs test/v1-edit-undo.test.mjs test/v11-api-e2e.test.mjs test/v11-multiasset-fiscal.test.mjs test/v12-api.test.mjs test/v12-cvm-proventos.test.mjs test/v13-integrations.test.mjs test/v14-provider-ipe.test.mjs test/v14-integration.test.mjs test/v14-dfp.test.mjs test/v24-core.test.mjs test/v25-optimizations.test.mjs test/v26-core.test.mjs test/v27-core.test.mjs test/v28-core.test.mjs test/windows-sqlite-cleanup.test.mjs test/v28-pdf-version-regression.test.mjs test/v28-watch-analysis-fix.test.mjs test/v29-api-center.test.mjs",
+    "test": "node --test --test-concurrency=1 test/ai.test.mjs test/api-e2e.test.mjs test/domain.test.mjs test/extended.test.mjs test/store.test.mjs test/v03.test.mjs test/v04-api.test.mjs test/v04-export.test.mjs test/v04-market-tax.test.mjs test/v05-integrity.test.mjs test/v05-security.test.mjs test/v06-api.test.mjs test/v06-market-history.test.mjs test/v1-api.test.mjs test/v1-community.test.mjs test/v1-core.test.mjs test/v1-document-backup.test.mjs test/v1-edit-undo.test.mjs test/v11-api-e2e.test.mjs test/v11-multiasset-fiscal.test.mjs test/v12-api.test.mjs test/v12-cvm-proventos.test.mjs test/v13-integrations.test.mjs test/v14-provider-ipe.test.mjs test/v14-integration.test.mjs test/v14-dfp.test.mjs test/v24-core.test.mjs test/v25-optimizations.test.mjs test/v26-core.test.mjs test/v27-core.test.mjs test/v28-core.test.mjs test/windows-sqlite-cleanup.test.mjs test/v28-pdf-version-regression.test.mjs test/v28-watch-analysis-fix.test.mjs test/v29-api-center.test.mjs test/v30-core.test.mjs test/v300-release.test.mjs",
     "desktop:dev": "electron .",
-    "desktop:build": "electron-builder --config electron-builder.json"
+    "desktop:build": "electron-builder --config electron-builder.json",
+    "test:ui": "playwright test test/ui/v30-navigation.spec.mjs",
+    "benchmark:quality": "node test/benchmark-quality-v30.mjs",
+    "verify:release": "node scripts/release-gate.mjs"
   },
   "engines": {
     "node": ">=22.13.0"
@@ -17,7 +20,8 @@
   "main": "desktop/main.cjs",
   "devDependencies": {
     "electron": "^38.0.0",
-    "electron-builder": "^26.0.0"
+    "electron-builder": "^26.0.0",
+    "@playwright/test": "^1.58.0"
   },
   "dependencies": {
     "pdfjs-dist": "^6.4.299"

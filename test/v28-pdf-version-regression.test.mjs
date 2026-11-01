@@ -5,7 +5,7 @@ import {readPdf,parseB3CustodyText} from '../src/pdf.mjs';
 import {expectedMetricsVersion} from './helpers/expected-metrics-version.mjs';
 
 test('Metrics: versão declarada válida independente do minor release',()=>{
- assert.match(expectedMetricsVersion,/^2\.\d+\.\d+-preview\.\d+$/);
+ assert.match(expectedMetricsVersion,/^\d+\.\d+\.\d+(?:-(?:rc|preview)\.\d+)?$/);
 });
 
 test('2.8: PDF com texto é extraído sem erro no encerramento do PDF.js',async()=>{
