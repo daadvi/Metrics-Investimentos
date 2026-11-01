@@ -1,0 +1,40 @@
+name: Metrics Quality | browser and financial checks
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  quality:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Dependencies
+        run: npm install --no-audit --no-fund
+      - name: Syntax
+        run: |
+          node --check server.mjs
+          node --check web/app.js
+          node --check web/metrics-v30-shell.js
+          node --check web/metrics-v30-ui.js
+      - name: Finance and API regressions
+        run: npm test
+      - name: Chromium browser
+        run: npx playwright install chromium
+      - name: UI tests
+        run: npm run test:ui
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: quality-failures-${{ matrix.os }}
+          path: test-results/
+          retention-days: 10

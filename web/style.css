@@ -27,3 +27,9 @@
 /* Metrics v1.3: long navigation must remain scrollable at small desktop heights. */
 @media(min-width:721px){.sidebar .nav{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--soft2) transparent}.sidebar .side-bottom{flex:none}}
 @media(max-width:720px){.sidebar .nav{flex:none;overflow-x:auto;overflow-y:hidden}}
+
+/* Metrics Quality v30 */
+.sidebar .nav{overscroll-behavior:contain;scrollbar-gutter:stable;}
+.sidebar [data-nav]:focus-visible,.btn:focus-visible,.input:focus-visible{outline:2px solid #6ea8ff;outline-offset:2px;}
+/* Metrics 3.0 responsive scroll fix: scrolling ELEMENT has constrained width. */
+@media(max-width:720px){ .sidebar{overflow-x:hidden;} .sidebar .nav{box-sizing:border-box;display:flex;flex-direction:row; flex:none;min-width:0;width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden; justify-content:flex-start;flex-wrap:nowrap;scrollbar-gutter:auto;overscroll-behavior-x:contain;} .sidebar .nav .item{flex:0 0 auto;min-width:68px;}}

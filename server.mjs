@@ -16,6 +16,8 @@ import {performanceEvidence28,validatePortfolioValuation28} from './src/return-e
 import {historyPage28,change as changeStore28} from './src/store.mjs';
 import {PROVIDER_TYPES,providerOf,validateConnection,newConnection,createApiVault,fetchProviderCatalog,searchCatalog,trackedTickers} from './src/api-center-v29.mjs';
 import http from 'node:http';
+import {qualityReport30,allocationReport30,compareAssets30,reconcileReport30} from './src/metrics-quality-v30.mjs';
+import {providerHealth30,nextSyncBatch30} from './src/metrics-api-health-v30.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -56,6 +58,7 @@ import {fetchBrapiDataset,normalizeProviderData} from './src/market-intelligence
 import {localAlerts,screener,incomeGoal} from './src/radar-v1.mjs';
 const metricsVault29=createApiVault({dir:process.env.METRICS_DATA_DIR||path.join((await import('node:os')).default.homedir(),'.metrics-investimentos')});
 const HOME=path.dirname(fileURLToPath(import.meta.url)),WWW=path.join(HOME,'web');
+const METRICS_RELEASE_VERSION=JSON.parse(await fs.readFile(path.join(HOME,'package.json'),'utf8')).version;
 const PORT=Number(process.env.PORT||4173),HOST='127.0.0.1',ORIGIN=`http://${HOST}:${PORT}`;
 const ACCESS_TOKEN=randomBytes(32).toString('hex');
 const COOKIE='metrics_session';
@@ -134,7 +137,7 @@ async function handler(req,res){const url=new URL(req.url,ORIGIN);
   if(req.method==='GET'&&url.pathname==='/api/v26/system'){
    const nodeVersion=process.versions.node,parts=nodeVersion.split('.').map(Number);
    const nodeCompatible=parts[0]>22||(parts[0]===22&&parts[1]>=13);
-   return reply(res,200,{version:'2.9.0-preview.1',platform:process.platform,nodeVersion,nodeCompatible,storageCache:storageCacheStatus26(),desktopRuntime:process.env.ELECTRON_RUN_AS_NODE==='1',warning:'A verificação não confirma backups, compilação Windows, extratos ou certificados fiscais. As etapas do guia exigem confirmação manual.'});
+   return reply(res,200,{version:METRICS_RELEASE_VERSION,platform:process.platform,nodeVersion,nodeCompatible,storageCache:storageCacheStatus26(),desktopRuntime:process.env.ELECTRON_RUN_AS_NODE==='1',warning:'A verificação não confirma backups, compilação Windows, extratos ou certificados fiscais. As etapas do guia exigem confirmação manual.'});
   }
   // Metrics v2.7: controlled pagination and read-only import reconciliation.
   if(req.method==='GET'&&url.pathname==='/api/v27/history')return reply(res,200,metricsPager27.page(await read(),{kind:url.searchParams.get('kind')||'transactions',limit:Number(url.searchParams.get('limit')||40),cursor:url.searchParams.get('cursor')||null,portfolioId:String(req.headers['x-metrics-portfolio-id']||'active'),from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||'',ticker:url.searchParams.get('ticker')||''}));
@@ -253,6 +256,13 @@ async function handler(req,res){const url=new URL(req.url,ORIGIN);
     return reply(res,404,{error:'Recurso da Central de APIs não encontrado.'});
   }
 
+  // Metrics Quality v30: all checks are read-only, isolated by the portfolio request context.
+  if(req.method==='GET'&&url.pathname==='/api/v30/quality')return reply(res,200,qualityReport30(await read(),{asOf:url.searchParams.get('asOf')||new Date().toISOString().slice(0,10)}));
+  if(req.method==='GET'&&url.pathname==='/api/v30/reconcile')return reply(res,200,reconcileReport30(await read(),{from:url.searchParams.get('from')||'2000-01-01',to:url.searchParams.get('to')||'2200-12-31'}));
+  if(req.method==='POST'&&url.pathname==='/api/v30/allocation'){const p=await body(req,16000);return reply(res,200,allocationReport30(await read(),{asOf:p.asOf||new Date().toISOString().slice(0,10),targets:p.targets||{}}));}
+  if(req.method==='GET'&&url.pathname==='/api/v30/compare'){const tickers=String(url.searchParams.get('tickers')||'').split(',').filter(Boolean);return reply(res,200,compareAssets30(await read(),{tickers,asOf:url.searchParams.get('asOf')||new Date().toISOString().slice(0,10)}));}
+  if(req.method==='GET'&&url.pathname==='/api/v30/provider-health')return reply(res,200,providerHealth30(await read()));
+  if(req.method==='GET'&&url.pathname==='/api/v30/sync-plan')return reply(res,200,nextSyncBatch30(await read(),{connectionId:url.searchParams.get('connectionId'),limit:8}));
   if(req.method==='GET'&&url.pathname==='/api/state'){const db=await read();return reply(res,200,{transactions:db.transactions,instruments:db.instruments||[],fixedIncome:db.fixedIncome||[],foreignTrades:db.foreignTrades||[],foreignAudit:(db.foreignAudit||[]).slice(-15).map(({before,after,...rest})=>({...rest,ticker:(after||before)?.ticker})),foreignPositions:foreignPositions(db.foreignTrades),fxRates:db.fxRates||[],taxEvidence:db.taxEvidence||[],foreignMarketQuotes:db.foreignMarketQuotes||[],providerDividendFeed:(db.providerDividendFeed||[]).slice(-200),ipeIndex:(db.ipeIndex||[]).slice(0,150),cvmStatementsCount:(db.cvmStatements||[]).length,externalFlows:db.externalFlows||[],assetValuations:db.assetValuations||[],officialChecks:db.officialChecks||[],taxReviews:db.taxReviews||[],notices:db.notices||[],transactionAudit:(db.transactionAudit||[]).slice(-30).map(({before,after,...item})=>({...item,ticker:(after||before)?.ticker,type:(after||before)?.type})),watchlist:db.watchlist,messages:db.messages,quotes:db.quotes,profiles:db.profiles,events:db.events,snapshots:db.snapshots||[],documents:docsList(db),imports:db.imports,cvmReports:(db.cvmReports||[]).length,quoteHistoryStats:{observations:(db.quoteHistory||[]).length,firstDate:db.quoteHistory?.length?[...db.quoteHistory].sort((a,b)=>a.date.localeCompare(b.date))[0].date:null,lastDate:db.quoteHistory?.length?[...db.quoteHistory].sort((a,b)=>b.date.localeCompare(a.date))[0].date:null},benchmarkDays:(db.benchmarkCDI||[]).length,settings:db.settings,summary:portfolioTotals(db.transactions),analytics:portfolioAnalytics(db.transactions,db.quotes),dataLocation:location(),encrypted:isEncrypted()});}
   // Portfolio boundaries: each request is scoped through AsyncLocalStorage, never a process-wide mutable variable.
   // Multi-asset registry, fixed-income contracts, PTAX and tax evidence: no inferred market prices.
@@ -384,7 +394,7 @@ async function handler(req,res){const url=new URL(req.url,ORIGIN);
   if(req.method==='POST'&&/^\/api\/extensions\/[a-z0-9.-]+\/permissions$/.test(url.pathname))return reply(res,200,{permission:await grantExtension(url.pathname.split('/')[3],await body(req))});
   if(req.method==='GET'&&/^\/api\/extensions\/[a-z0-9.-]+\/dashboard$/.test(url.pathname))return reply(res,200,await extensionDashboard(url.pathname.split('/')[3]));
   if(req.method==='DELETE'&&/^\/api\/extensions\/[a-z0-9.-]+$/.test(url.pathname))return reply(res,200,await uninstallExtension(url.pathname.split('/')[3]));
-  if(req.method==='GET'&&url.pathname==='/api/health')return reply(res,200,{ok:true,version:'2.9.0-preview.1',db:'sqlite',encrypted:isEncrypted()});
+  if(req.method==='GET'&&url.pathname==='/api/health')return reply(res,200,{ok:true,version:METRICS_RELEASE_VERSION,db:'sqlite',encrypted:isEncrypted()});
 
   if(req.method==='GET'&&url.pathname==='/api/performance'){
    const db=await read(),h=historyReport(db);
@@ -552,4 +562,4 @@ async function handler(req,res){const url=new URL(req.url,ORIGIN);
  const route=url.pathname==='/'?'/index.html':url.pathname;if(route.includes('..')||route.includes('\\')||route.includes('\0'))return reply(res,404,{error:'Arquivo não encontrado.'});const abs=path.resolve(WWW,'.'+route);if(!abs.startsWith(WWW+path.sep))return reply(res,404,{error:'Arquivo não encontrado.'});
  try{const stat=await fs.stat(abs);if(!stat.isFile())throw Error();const b=await fs.readFile(abs);res.writeHead(200,{'Content-Type':TYPES[path.extname(abs)]||'application/octet-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"});if(req.method==='HEAD')res.end();else res.end(b);}catch{return reply(res,404,{error:'Arquivo não encontrado.'});}
 }
-await init();http.createServer((req,res)=>{handler(req,res).catch(e=>{if(!res.headersSent)bad(res,e);})}).listen(PORT,HOST,()=>{console.log(`Metrics Investimentos 2.9.0-preview.1 | dados: ${location()} | criptografia: ${isEncrypted()?'ativada':'não ativada'}`);console.log(`METRICS_LAUNCH_URL=${ORIGIN}/?access=${ACCESS_TOKEN}`);});
+await init();http.createServer((req,res)=>{handler(req,res).catch(e=>{if(!res.headersSent)bad(res,e);})}).listen(PORT,HOST,()=>{console.log(`Metrics Investimentos ${METRICS_RELEASE_VERSION} | dados: ${location()} | criptografia: ${isEncrypted()?'ativada':'não ativada'}`);console.log(`METRICS_LAUNCH_URL=${ORIGIN}/?access=${ACCESS_TOKEN}`);});
