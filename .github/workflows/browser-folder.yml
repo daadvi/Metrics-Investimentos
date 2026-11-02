@@ -1,0 +1,65 @@
+name: Metrics Browser | Pasta Windows portatil
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - release/3.0.0
+      - 'feature/metrics-browser-*'
+    paths:
+      - 'browser-distribution/**'
+      - 'src/**'
+      - 'web/**'
+      - 'server.mjs'
+      - 'launcher.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/browser-folder.yml'
+permissions:
+  contents: read
+jobs:
+  windows-browser-folder:
+    runs-on: windows-2022
+    timeout-minutes: 55
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Instalar dependencias para testes
+        run: npm ci --no-audit --no-fund
+      - name: Verificar integridade funcional
+        run: npm test
+      - name: Instalar navegador para testes de interface
+        run: npx playwright install chromium
+      - name: Testar interface no navegador
+        run: npm run test:ui
+      - name: Testar distribuidor e supervisor local
+        run: node --test browser-distribution/test/browser-folder.test.mjs
+      - name: Remover dependencias de desenvolvimento
+        run: npm prune --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Criar pasta com Node portatil
+        run: node browser-distribution/build-browser-windows.mjs . "dist/browser/Metrics Investimentos"
+      - name: Compactar pasta distribuivel
+        shell: pwsh
+        run: |
+          Compress-Archive -LiteralPath 'dist/browser/Metrics Investimentos' -DestinationPath 'dist/Metrics-Browser-Windows.zip' -Force
+          if (-not (Test-Path 'dist/Metrics-Browser-Windows.zip')) { throw 'Arquivo ZIP ausente' }
+          Write-Host ((Get-Item 'dist/Metrics-Browser-Windows.zip').Length)
+      - name: Baixar pasta pronta
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrics-Browser-Windows
+          path: dist/Metrics-Browser-Windows.zip
+          retention-days: 30
+          if-no-files-found: error
+      - name: Logs de testes visuais se houver falha
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrics-Browser-Diagnostico
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore

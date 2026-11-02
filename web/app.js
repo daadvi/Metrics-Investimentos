@@ -462,7 +462,7 @@ function metricsBindWatch28(){
   const container=document.createElement('section');container.id='watch-edit-v28';container.className='card spaced';container.hidden=true;
   container.setAttribute('aria-label','Editar ativo desejado');
   content.insertBefore(container,content.firstChild?.nextSibling||null);
-  for(const edit of $('[data-edit-watch]')){
+  for(const edit of $$('[data-edit-watch]')){
     const id=edit.dataset.editWatch;
     edit.textContent='Editar completo';
     edit.onclick=()=>{
@@ -517,7 +517,7 @@ function metricsBindAssets28(){
   form.parentElement.insertBefore(newStock,feedback);
   const type=form.elements.namedItem('type');
   if(type){type.addEventListener('change',()=>{feedback.textContent=type.value==='ACAO'?'Ação selecionada: dados financeiros opcionais e documentados.':'Cadastre dados de acordo com a classe selecionada.';});}
-  for(const remove of $('[data-remove-profile]')){
+  for(const remove of $$('[data-remove-profile]')){
     const t=remove.dataset.removeProfile,profile=(S.profiles||[]).find(x=>x.ticker===t);
     const button=document.createElement('button');button.type='button';button.className='btn smol';button.textContent='Editar ficha';
     button.onclick=()=>{if(!profile)return;metricsSetProfileFields28(form,profile);feedback.textContent='Editando '+profile.ticker+'. Salvar substitui a ficha deste ticker, sem criar duplicata.';form.scrollIntoView({behavior:'smooth',block:'start'});};
